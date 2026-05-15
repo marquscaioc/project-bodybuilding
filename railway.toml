@@ -1,0 +1,11 @@
+# Railway uses Railpack as its default builder. Railpack reads the install
+# command from the RAILPACK_INSTALL_CMD env var (a nixpacks.toml is ignored).
+# Override `npm ci` with `npm install --include=optional` so the build doesn't
+# reject the Windows-generated lockfile for missing Linux-only optional
+# natives (@emnapi/core, @emnapi/runtime via @napi-rs/wasm-runtime).
+
+[build]
+builder = "RAILPACK"
+
+[build.env]
+RAILPACK_INSTALL_CMD = "npm install --include=optional --no-audit --no-fund"

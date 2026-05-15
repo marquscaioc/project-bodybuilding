@@ -1,9 +1,0 @@
-# Override Nixpacks (Railway's default builder) so the install step uses
-# `npm install` instead of `npm ci`. The strict ci command refuses to fix
-# missing platform-specific optional natives (@emnapi/core, @emnapi/runtime
-# referenced by @napi-rs/wasm-runtime), which Windows-generated lockfiles
-# omit but Linux build images need to install. `npm install` resolves them
-# on the fly without invalidating the rest of the pinned lockfile.
-
-[phases.install]
-cmds = ["npm install --include=optional --no-audit --no-fund"]
