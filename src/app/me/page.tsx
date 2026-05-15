@@ -9,17 +9,27 @@ import { paletteToStyle } from '@/lib/customJudges';
 export const dynamic = 'force-dynamic';
 
 export default async function MePage() {
-  const supabase = await getSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login?next=/me');
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle();
+  // Defensive: if Supabase isn't configured / down, send the user to /login
+  // rather than letting the page crash with a 500.
+  let user;
+  let profile;
+  try {
+    const supabase = await getSupabaseServer();
+    const userResult = await supabase.auth.getUser();
+    user = userResult.data.user;
+    if (!user) redirect('/login?next=/me');
+    const profileResult = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+    profile = profileResult.data;
+  } catch (err) {
+    // `redirect()` throws internally — let it propagate.
+    if ((err as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw err;
+    console.warn('me page supabase fetch failed', err);
+    redirect('/login?next=/me');
+  }
 
   // Fall back to safe defaults if the profile trigger somehow didn't fire.
   const display = profile?.display_name || user.email?.split('@')[0] || 'Judge';
