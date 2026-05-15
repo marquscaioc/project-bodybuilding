@@ -26,15 +26,20 @@ export function useHeightLookup(
   useEffect(() => {
     const trimmed = name.trim();
     if (!enabled || trimmed.length < 3) {
+      console.info('[height-lookup] skipping', { name, enabled, len: trimmed.length });
       setState({ status: 'idle' });
       return;
     }
-    if (trimmed === lastQueriedRef.current) return;
+    if (trimmed === lastQueriedRef.current) {
+      console.info('[height-lookup] already queried', trimmed);
+      return;
+    }
 
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       lastQueriedRef.current = trimmed;
       setState({ status: 'loading' });
+      console.info('[height-lookup] querying', trimmed);
       try {
         const res = await fetch(
           `/api/athlete-height?name=${encodeURIComponent(trimmed)}`,
@@ -45,6 +50,7 @@ export function useHeightLookup(
           heightCm: number | null;
           page?: string;
         };
+        console.info('[height-lookup] result', trimmed, data);
         if (data.heightCm) {
           setState({ status: 'found', heightCm: data.heightCm, page: data.page });
           onFoundRef.current(data.heightCm);
@@ -53,6 +59,7 @@ export function useHeightLookup(
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
+        console.warn('[height-lookup] failed', trimmed, err);
         setState({ status: 'error' });
       }
     }, 700);
