@@ -115,7 +115,7 @@ export default function HomePage() {
         title="Local scorecards"
         subtitle="Shared password protected · data lives in this browser only"
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {BUILTINS.map((b) => (
             <ScorecardTile
               key={b.href}
@@ -137,7 +137,7 @@ export default function HomePage() {
           title="Your judges"
           subtitle="Custom scorecards saved on this browser"
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {customs.map((c) => (
               <ScorecardTile
                 key={c.id}
@@ -239,35 +239,46 @@ function ScorecardTile({
       style={themeStyle}
     >
       <div
-        className="flex h-32 items-end p-4"
+        className="relative flex items-center gap-3 p-3"
         style={{
           background:
             'linear-gradient(160deg, var(--mosaic-5, var(--bg-glow)) 0%, var(--bg) 90%)',
         }}
       >
-        {logoSrc && (
+        {logoSrc ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={logoSrc}
             alt=""
-            className="absolute right-3 top-3 h-12 w-12 rounded-full object-cover"
+            className="h-10 w-10 shrink-0 rounded-full object-cover"
             style={{
               boxShadow:
-                '0 0 0 2px var(--mosaic-1, var(--accent)), 0 0 18px -4px var(--mosaic-1, var(--accent))',
+                '0 0 0 1.5px var(--mosaic-1, var(--accent)), 0 0 14px -4px var(--mosaic-1, var(--accent))',
             }}
           />
+        ) : (
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs uppercase tracking-[0.15em]"
+            style={{
+              background: 'var(--mosaic-5, var(--bg-glow))',
+              border: '1.5px solid var(--mosaic-1, var(--accent))',
+              color: 'var(--mosaic-3, var(--accent))',
+            }}
+          >
+            {brandLine1.slice(0, 2)}
+          </span>
         )}
-        <div className="flex min-w-0 flex-col">
-          <span className="font-display text-xl uppercase tracking-[0.04em] text-[var(--fg)] sm:text-2xl">
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="truncate font-display text-base uppercase tracking-[0.04em] text-[var(--fg)]">
             {brandLine1}
           </span>
-          <span className="mt-0.5 inline-block w-fit max-w-full border-t-2 border-[var(--mosaic-3,var(--accent))] pt-0.5 font-display text-sm uppercase tracking-[0.14em] text-[var(--mosaic-3,var(--accent))]">
+          <span className="truncate font-display text-[0.65rem] uppercase tracking-[0.18em] text-[var(--mosaic-3,var(--accent))]">
             {brandLine2}
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-[var(--rule)] bg-black/50 px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[0.6rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
+      <div className="flex items-center justify-between border-t border-[var(--rule)] bg-black/50 px-3 py-1.5">
+        <span className="flex items-center gap-1 text-[0.55rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
           {locked && (
             <>
               <LockIcon />
@@ -275,12 +286,12 @@ function ScorecardTile({
             </>
           )}
         </span>
-        <span className="font-display text-[0.6rem] uppercase tracking-[0.25em] text-[var(--fg-dim)] group-hover:text-[var(--mosaic-1,var(--accent))]">
+        <span className="font-display text-[0.55rem] uppercase tracking-[0.25em] text-[var(--fg-dim)] group-hover:text-[var(--mosaic-1,var(--accent))]">
           Open →
         </span>
       </div>
       {/* Mosaic strip */}
-      <div className="flex h-1">
+      <div className="flex h-0.5">
         <span className="flex-1" style={{ background: 'var(--mosaic-1, var(--accent))' }} />
         <span className="flex-1" style={{ background: 'var(--mosaic-2, var(--accent))' }} />
         <span className="flex-1" style={{ background: 'var(--mosaic-3, var(--accent))' }} />
