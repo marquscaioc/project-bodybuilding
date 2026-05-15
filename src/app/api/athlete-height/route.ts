@@ -4,6 +4,25 @@ import { NextResponse } from 'next/server';
 const BODYBUILDER_HEIGHT_FUDGE_CM = 2;
 
 /**
+ * Wikipedia API policy requires a descriptive User-Agent with contact info.
+ * Without it they'll rate-limit or block (especially from cloud IPs).
+ */
+const USER_AGENT =
+  'ChowsScorecard/1.0 (https://github.com/marquscaioc/project-bodybuilding; rafaelfratazzi@gmail.com)';
+
+/**
+ * Tiny in-memory cache so a typing flurry doesn't hammer Wikipedia.
+ * Keys are normalized names; entries expire after CACHE_TTL_MS.
+ * Lives for the lifetime of the serverless instance.
+ */
+type CacheEntry = {
+  result: { heightCm: number; rawHeightCm: number; page: string; exempt: boolean } | null;
+  expires: number;
+};
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
  * Athletes exempt from the honesty fudge — keep this set tiny and well-justified.
  * Match is case-insensitive against the resolved Wikipedia page title.
  */
@@ -21,12 +40,28 @@ export async function GET(req: Request) {
     return NextResponse.json({ heightCm: null, source: null });
   }
 
-  // Try a few candidate searches — disambiguators help when names collide.
-  const candidates = [`${name} bodybuilder`, `${name} (bodybuilder)`, name];
+  // Cache hit: skip Wikipedia entirely.
+  const cacheKey = name.toLowerCase();
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) {
+    if (!cached.result) return NextResponse.json({ heightCm: null, source: null });
+    const r = cached.result;
+    return NextResponse.json({
+      heightCm: r.exempt ? r.rawHeightCm : r.rawHeightCm - BODYBUILDER_HEIGHT_FUDGE_CM,
+      rawHeightCm: r.rawHeightCm,
+      source: 'wikipedia',
+      page: r.page,
+      fudgeApplied: !r.exempt,
+      cached: true,
+    });
+  }
 
-  // Always pick the TALLEST plausible height across all candidates and
-  // all patterns within each page — bodybuilder pages often cite multiple
-  // sources, and stated heights skew toward the more flattering number.
+  // Try the simplest candidate first — most pages already disambiguated by
+  // having unique names. Only escalate to '<name> (bodybuilder)' / '<name>
+  // bodybuilder' when the simple lookup didn't yield a bodybuilder page.
+  const candidates = [name, `${name} (bodybuilder)`, `${name} bodybuilder`];
+
+  // Pick the TALLEST plausible height across all candidates and patterns.
   let best: { heightCm: number; page: string } | null = null;
   const seenTitles = new Set<string>();
 
@@ -43,15 +78,20 @@ export async function GET(req: Request) {
     if (heightCm && (!best || heightCm > best.heightCm)) {
       best = { heightCm, page: title };
     }
+
+    // Short-circuit: if the simplest candidate already gave us a height,
+    // skip the disambiguator queries (saves 2 round trips, less rate-limit risk).
+    if (best && q === name) break;
   }
 
   if (best) {
     const exempt = HONEST_BODYBUILDERS.has(best.page.toLowerCase());
-    const corrected = exempt
-      ? best.heightCm
-      : best.heightCm - BODYBUILDER_HEIGHT_FUDGE_CM;
+    cache.set(cacheKey, {
+      result: { rawHeightCm: best.heightCm, page: best.page, exempt, heightCm: 0 },
+      expires: Date.now() + CACHE_TTL_MS,
+    });
     return NextResponse.json({
-      heightCm: corrected,
+      heightCm: exempt ? best.heightCm : best.heightCm - BODYBUILDER_HEIGHT_FUDGE_CM,
       rawHeightCm: best.heightCm,
       source: 'wikipedia',
       page: best.page,
@@ -59,6 +99,8 @@ export async function GET(req: Request) {
     });
   }
 
+  // Cache the miss too (shorter TTL would be nice but not worth the code).
+  cache.set(cacheKey, { result: null, expires: Date.now() + CACHE_TTL_MS });
   return NextResponse.json({ heightCm: null, source: null });
 }
 
@@ -70,7 +112,7 @@ async function searchWikipedia(query: string): Promise<string | null> {
   url.searchParams.set('namespace', '0');
   url.searchParams.set('format', 'json');
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'ChowsScorecard/1.0' } });
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
     if (!res.ok) return null;
     const data = (await res.json()) as [string, string[], string[], string[]];
     return data[1]?.[0] ?? null;
@@ -87,7 +129,7 @@ async function fetchWikitext(title: string): Promise<string | null> {
   url.searchParams.set('format', 'json');
   url.searchParams.set('redirects', '1');
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'ChowsScorecard/1.0' } });
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
     if (!res.ok) return null;
     const data = (await res.json()) as { parse?: { wikitext?: { '*'?: string } } };
     return data.parse?.wikitext?.['*'] ?? null;
