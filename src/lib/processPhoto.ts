@@ -81,16 +81,39 @@ export async function processPhoto(
   }
 }
 
+/**
+ * When @imgly bg-removal fails (webpack chunk URL bug in production),
+ * still run face + pose detection against the raw photo. MediaPipe
+ * doesn't go through webpack chunk loading so it works fine. The
+ * cutout image will have its original background, but ankle-aligned
+ * ground line + face anchoring still apply.
+ */
 async function rawPhotoFallback(file: File, message: string): Promise<ProcessedPhoto> {
   const cutoutUrl = await blobToDataUrl(file);
   const img = await loadImage(cutoutUrl);
   const w = img.naturalWidth || 1;
   const h = img.naturalHeight || 1;
+
+  // Best-effort detection on the raw image. Either may fail independently;
+  // each is wrapped so one failure doesn't kill the other.
+  let face = null;
+  let pose = null;
+  try {
+    face = await detectFace(cutoutUrl);
+  } catch (e) {
+    console.warn('face detection on raw fallback failed', e);
+  }
+  try {
+    pose = await detectPose(cutoutUrl);
+  } catch (e) {
+    console.warn('pose detection on raw fallback failed', e);
+  }
+
   return {
     cutoutUrl,
-    face: null,
+    face,
     body: { x: 0, y: 0, width: w, height: h, imgW: w, imgH: h },
-    pose: null,
+    pose,
     aiFailed: true,
     aiError: message,
   };
