@@ -5,7 +5,6 @@ import clsx from 'clsx';
 import type { Side } from '@/types';
 import { useScorecard } from '@/lib/store';
 import { processPhoto } from '@/lib/processPhoto';
-import { classifyOrientation, defaultPoseForOrientation } from '@/lib/poseDetect';
 import { POSES } from '@/lib/constants';
 
 type ImportRecord = { side: Side; poseId: string };
@@ -29,6 +28,11 @@ function stripSizeSuffixes(url: string): string {
 
 export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const setPhoto = useScorecard((s) => s.setPhoto);
+  // Imports land on whatever pose tab is currently active in the
+  // comparison stage. Auto-orientation guess was wrong for FDB/FLS/AB+T/MM
+  // because they all look "front" — defaulting them all to FDB piled
+  // every photo onto the same tab.
+  const currentPoseId = useScorecard((s) => s.currentPoseId);
 
   const [url, setUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -112,17 +116,18 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
       const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
 
       stage = 'process';
+      // Capture the active pose at import-start so a tab switch mid-process
+      // doesn't redirect the result.
+      const targetPoseId = currentPoseId;
       const { cutoutUrl, face, body, pose, aiFailed, aiError } = await processPhoto(file);
-      const orientation = classifyOrientation(pose);
-      const poseId = defaultPoseForOrientation(orientation);
 
-      setPhoto(side, poseId, {
+      setPhoto(side, targetPoseId, {
         imageUrl: cutoutUrl,
         face: face ?? undefined,
         body,
         pose: pose ?? undefined,
       });
-      setImported((m) => ({ ...m, [imgUrl]: { side, poseId } }));
+      setImported((m) => ({ ...m, [imgUrl]: { side, poseId: targetPoseId } }));
       if (aiFailed) {
         setError(
           `AI unavailable (${aiError}) — photo imported raw. Disable wallet extensions or try Incognito for bg-removed cutouts.`,
@@ -162,7 +167,11 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
               Import From Gallery
             </span>
             <span className="text-[0.65rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
-              Paste any gallery URL · auto-classifies front / side / rear
+              Imports land on the{' '}
+              <span className="text-[var(--accent)]">
+                {POSES.find((p) => p.id === currentPoseId)?.short ?? currentPoseId}
+              </span>{' '}
+              tab · switch tab before importing to send elsewhere
             </span>
           </div>
           <button
