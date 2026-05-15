@@ -112,7 +112,7 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
       const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
 
       stage = 'process';
-      const { cutoutUrl, face, body, pose } = await processPhoto(file);
+      const { cutoutUrl, face, body, pose, aiFailed, aiError } = await processPhoto(file);
       const orientation = classifyOrientation(pose);
       const poseId = defaultPoseForOrientation(orientation);
 
@@ -123,6 +123,11 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
         pose: pose ?? undefined,
       });
       setImported((m) => ({ ...m, [imgUrl]: { side, poseId } }));
+      if (aiFailed) {
+        setError(
+          `AI unavailable (${aiError}) — photo imported raw. Disable wallet extensions or try Incognito for bg-removed cutouts.`,
+        );
+      }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
       console.error(`Import failed at ${stage}`, e);

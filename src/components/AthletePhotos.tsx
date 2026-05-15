@@ -235,17 +235,21 @@ function PhotoSlot({ side }: { side: Side }) {
     if (!file || !file.type.startsWith('image/')) return;
     setError(null);
     setProgress('removing-bg');
-    // Capture the active pose at upload-start; if the user switches tabs
-    // while processing, the result still lands on the pose they uploaded for.
     const targetPoseId = currentPoseId;
     try {
-      const { cutoutUrl, face, body, pose } = await processPhoto(file, setProgress);
+      const { cutoutUrl, face, body, pose, aiFailed, aiError } = await processPhoto(
+        file,
+        setProgress,
+      );
       setPhoto(side, targetPoseId, {
         imageUrl: cutoutUrl,
         face: face ?? undefined,
         body,
         pose: pose ?? undefined,
       });
+      if (aiFailed) {
+        setError(`AI unavailable (${aiError}) — uploaded raw. Disable wallet extensions or try Incognito.`);
+      }
     } catch (e) {
       console.error(e);
       setError('Processing failed — try another photo');

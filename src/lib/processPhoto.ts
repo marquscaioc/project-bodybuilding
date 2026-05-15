@@ -6,14 +6,19 @@ import { detectPose } from './poseDetect';
 import { loadImage } from './loadImage';
 
 export type ProcessedPhoto = {
-  /** data: URL of the background-removed cutout (transparent PNG). */
+  /** data: URL of the background-removed cutout (transparent PNG), OR
+   *  the raw image data URL when the AI pipeline failed (see aiFailed). */
   cutoutUrl: string;
   /** Face bounding box in cutout pixel coordinates, or null if undetected. */
   face: FaceBox | null;
-  /** Tight bounding box around the visible (non-transparent) subject. */
+  /** Tight bounding box around the visible subject (full image when AI failed). */
   body: BodyBox;
   /** 33 MediaPipe pose landmarks, or null if no body detected. */
   pose: Pose | null;
+  /** True when bg-removal / face / pose all failed and we're showing the raw photo. */
+  aiFailed?: boolean;
+  /** Diagnostic message when aiFailed = true. */
+  aiError?: string;
 };
 
 export type ProgressStage =
@@ -27,22 +32,47 @@ export async function processPhoto(
   file: File,
   onProgress?: (stage: ProgressStage) => void,
 ): Promise<ProcessedPhoto> {
-  onProgress?.('removing-bg');
-  const { removeBackground } = await import('@imgly/background-removal');
-  const cutoutBlob = await removeBackground(file);
-  const cutoutUrl = await blobToDataUrl(cutoutBlob);
+  try {
+    onProgress?.('removing-bg');
+    const { removeBackground } = await import('@imgly/background-removal');
+    const cutoutBlob = await removeBackground(file);
+    const cutoutUrl = await blobToDataUrl(cutoutBlob);
 
-  onProgress?.('measuring-body');
-  const body = await computeBodyBoundingBox(cutoutUrl);
+    onProgress?.('measuring-body');
+    const body = await computeBodyBoundingBox(cutoutUrl);
 
-  onProgress?.('detecting-face');
-  const face = await detectFace(cutoutUrl);
+    onProgress?.('detecting-face');
+    const face = await detectFace(cutoutUrl);
 
-  onProgress?.('detecting-pose');
-  const pose = await detectPose(cutoutUrl);
+    onProgress?.('detecting-pose');
+    const pose = await detectPose(cutoutUrl);
 
-  onProgress?.('done');
-  return { cutoutUrl, face, body, pose };
+    onProgress?.('done');
+    return { cutoutUrl, face, body, pose };
+  } catch (err) {
+    // Browser extensions (MetaMask SES, Edge Wallet) or blocked CDNs can
+    // break the AI pipeline. Fall back to the raw upload so the app stays
+    // usable — the photo just won't have its background removed and head/
+    // pose-aware sizing won't apply.
+    console.warn('AI processing failed, using raw photo as fallback', err);
+    onProgress?.('done');
+    return await rawPhotoFallback(file, (err as Error)?.message ?? String(err));
+  }
+}
+
+async function rawPhotoFallback(file: File, message: string): Promise<ProcessedPhoto> {
+  const cutoutUrl = await blobToDataUrl(file);
+  const img = await loadImage(cutoutUrl);
+  const w = img.naturalWidth || 1;
+  const h = img.naturalHeight || 1;
+  return {
+    cutoutUrl,
+    face: null,
+    body: { x: 0, y: 0, width: w, height: h, imgW: w, imgH: h },
+    pose: null,
+    aiFailed: true,
+    aiError: message,
+  };
 }
 
 /**
