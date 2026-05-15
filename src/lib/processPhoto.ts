@@ -28,14 +28,37 @@ export type ProgressStage =
   | 'detecting-pose'
   | 'done';
 
+/**
+ * Pin the model + WASM CDN explicitly so @imgly/background-removal
+ * doesn't try to derive the path via import.meta.url (which webpack-
+ * bundled chunks resolve unpredictably). Latest known-good is 1.7.0.
+ */
+const IMGLY_PUBLIC_PATH =
+  'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
+
 export async function processPhoto(
   file: File,
   onProgress?: (stage: ProgressStage) => void,
 ): Promise<ProcessedPhoto> {
+  // Quick environment check — WASM is required by every model below.
+  if (typeof WebAssembly === 'undefined') {
+    onProgress?.('done');
+    return await rawPhotoFallback(file, 'WebAssembly not available in this browser');
+  }
+
   try {
     onProgress?.('removing-bg');
     const { removeBackground } = await import('@imgly/background-removal');
-    const cutoutBlob = await removeBackground(file);
+    const cutoutBlob = await removeBackground(file, {
+      publicPath: IMGLY_PUBLIC_PATH,
+      debug: false,
+      progress: (key, current, total) => {
+        // Surface model download progress to the console for debugging.
+        if (current === total) {
+          console.info(`[imgly] loaded ${key}`);
+        }
+      },
+    });
     const cutoutUrl = await blobToDataUrl(cutoutBlob);
 
     onProgress?.('measuring-body');
@@ -50,10 +73,6 @@ export async function processPhoto(
     onProgress?.('done');
     return { cutoutUrl, face, body, pose };
   } catch (err) {
-    // Browser extensions (MetaMask SES, Edge Wallet) or blocked CDNs can
-    // break the AI pipeline. Fall back to the raw upload so the app stays
-    // usable — the photo just won't have its background removed and head/
-    // pose-aware sizing won't apply.
     console.warn('AI processing failed, using raw photo as fallback', err);
     onProgress?.('done');
     return await rawPhotoFallback(file, (err as Error)?.message ?? String(err));
