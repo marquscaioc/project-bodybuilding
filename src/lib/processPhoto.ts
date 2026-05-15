@@ -36,6 +36,38 @@ export type ProgressStage =
 const IMGLY_PUBLIC_PATH =
   'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
 
+/**
+ * The webpack production build mangles @imgly's internal chunk URL
+ * resolution (`new __webpack_require__.U(...)` gets a numeric chunk ID
+ * and crashes on `.replace`). Dev mode dodges this because it doesn't
+ * re-bundle the package. To replicate dev behavior in production we
+ * load the package at runtime from esm.sh — a CDN that serves npm
+ * packages as native ES modules with bare-import resolution. The
+ * import() goes through `new Function` to hide it from webpack's
+ * static analysis so it stays a real dynamic import at runtime.
+ */
+const IMGLY_CDN_ENTRY =
+  'https://esm.sh/@imgly/background-removal@1.7.0?bundle';
+
+let imglyPromise: Promise<typeof import('@imgly/background-removal')> | null = null;
+
+function loadImglyFromCdn(): Promise<typeof import('@imgly/background-removal')> {
+  if (imglyPromise) return imglyPromise;
+  // `new Function` creates a function in global scope; webpack can't
+  // statically analyze the import() inside, so it stays a true browser
+  // dynamic import at runtime instead of being rewritten to chunk loading.
+  const dynamicImport = new Function('u', 'return import(u)') as (
+    u: string,
+  ) => Promise<unknown>;
+  imglyPromise = dynamicImport(IMGLY_CDN_ENTRY).then(
+    (mod) => mod as typeof import('@imgly/background-removal'),
+  ).catch((err) => {
+    imglyPromise = null;
+    throw err;
+  });
+  return imglyPromise;
+}
+
 export async function processPhoto(
   file: File,
   onProgress?: (stage: ProgressStage) => void,
@@ -48,7 +80,8 @@ export async function processPhoto(
 
   try {
     onProgress?.('removing-bg');
-    const { removeBackground } = await import('@imgly/background-removal');
+    // Load via runtime CDN to bypass production webpack chunk-URL mangling.
+    const { removeBackground } = await loadImglyFromCdn();
     const cutoutBlob = await removeBackground(file, {
       publicPath: IMGLY_PUBLIC_PATH,
       debug: false,
