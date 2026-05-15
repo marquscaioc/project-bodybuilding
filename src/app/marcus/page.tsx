@@ -1,16 +1,19 @@
 import { ScorecardPage } from '@/components/ScorecardPage';
+import { PasswordGate } from '@/components/PasswordGate';
 
 export const metadata = { title: 'Marcus · Scorecard' };
 
 export default function Page() {
   return (
-    <ScorecardPage
-      judgeId="marcus"
-      themeClass="theme-marcus"
-      brand="Marcus"
-      brandLine1="Marcus"
-      brandLine2="Scorecard"
-      logoSrc="/logos/muscle.jpg"
-    />
+    <PasswordGate>
+      <ScorecardPage
+        judgeId="marcus"
+        themeClass="theme-marcus"
+        brand="Marcus"
+        brandLine1="Marcus"
+        brandLine2="Scorecard"
+        logoSrc="/logos/muscle.jpg"
+      />
+    </PasswordGate>
   );
 }

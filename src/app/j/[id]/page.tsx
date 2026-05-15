@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ScorecardPage } from '@/components/ScorecardPage';
+import { PasswordGate } from '@/components/PasswordGate';
 import {
   CUSTOM_JUDGES_EVENT,
   getCustomJudge,
@@ -58,13 +59,15 @@ export default function CustomJudgeRoute() {
   }
 
   return (
-    <ScorecardPage
-      judgeId={config.id}
-      themeStyle={paletteToStyle(config)}
-      brand={config.name}
-      brandLine1={config.brandLine1}
-      brandLine2={config.brandLine2}
-      logoSrc={config.logoDataUrl}
-    />
+    <PasswordGate>
+      <ScorecardPage
+        judgeId={config.id}
+        themeStyle={paletteToStyle(config)}
+        brand={config.name}
+        brandLine1={config.brandLine1}
+        brandLine2={config.brandLine2}
+        logoSrc={config.logoDataUrl}
+      />
+    </PasswordGate>
   );
 }
