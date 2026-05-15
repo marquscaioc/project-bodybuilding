@@ -3,9 +3,12 @@ const nextConfig = {
   // @imgly/background-removal pulls in onnxruntime-web/onnxruntime-node which
   // ship as ESM with `import.meta` and `createRequire`. Webpack needs to be
   // told to handle .mjs as ESM and not try to bundle the node-only variant.
+  // Keep onnxruntime-node external (server-only); transpile imgly so it
+  // shares the main webpack runtime instead of shipping its own broken one.
   experimental: {
-    serverComponentsExternalPackages: ['@imgly/background-removal', 'onnxruntime-node'],
+    serverComponentsExternalPackages: ['onnxruntime-node'],
   },
+  transpilePackages: ['@imgly/background-removal'],
   webpack: (config, { isServer }) => {
     // Treat .mjs files as ESM modules so `import.meta` parses cleanly.
     config.module.rules.push({
