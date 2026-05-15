@@ -86,7 +86,12 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
   }
 
   async function handleImport(imgUrl: string, side: Side) {
+    if (typeof imgUrl !== 'string' || !imgUrl) {
+      setError('Skipping: image URL was not a string');
+      return;
+    }
     setImporting((s) => ({ ...s, [imgUrl]: side }));
+    let stage: 'download' | 'process' = 'download';
     try {
       // Try the largest-possible URL first (strips WordPress -WxH and -scaled
       // suffixes); fall back to the original URL on 404 or proxy error.
@@ -106,6 +111,7 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
       const filename = imgUrl.split('/').pop()?.split('?')[0] ?? 'photo.jpg';
       const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
 
+      stage = 'process';
       const { cutoutUrl, face, body, pose } = await processPhoto(file);
       const orientation = classifyOrientation(pose);
       const poseId = defaultPoseForOrientation(orientation);
@@ -118,8 +124,13 @@ export function ImporterDialog({ open, onClose }: { open: boolean; onClose: () =
       });
       setImported((m) => ({ ...m, [imgUrl]: { side, poseId } }));
     } catch (e) {
-      console.error('Import failed', e);
-      setError(`Import failed: ${(e as Error).message}`);
+      const msg = (e as Error)?.message ?? String(e);
+      console.error(`Import failed at ${stage}`, e);
+      const help =
+        stage === 'process'
+          ? ' — likely a browser extension (MetaMask / wallet) interfering with the AI model. Try Incognito.'
+          : '';
+      setError(`Import failed (${stage}): ${msg}${help}`);
     } finally {
       setImporting((s) => {
         const next = { ...s };
