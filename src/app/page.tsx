@@ -110,6 +110,22 @@ export default function HomePage() {
         </div>
       </Section>
 
+      {/* ─── Open passwordless scorecard ─── */}
+      <Section
+        title="Open scorecard"
+        subtitle="Public link · no password · share it freely"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2">
+          <ScorecardTile
+            href="/open"
+            brand="Open Scorecard"
+            brandLine1="Open"
+            brandLine2="Scorecard"
+            themeClass="theme-project-bodybuilding"
+          />
+        </div>
+      </Section>
+
       {/* ─── Built-in local judges ─── */}
       <Section
         title="Local scorecards"
