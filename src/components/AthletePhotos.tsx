@@ -28,6 +28,13 @@ const BODY_FILL_FRAC = 0.82;
 const GROUND_LINE = 0.97;
 /** Fallback: face center anchors here when pose isn't detected. */
 const HEAD_VERTICAL_POS = 0.13;
+/**
+ * Head-as-metric scale: face height as a fraction of slot height.
+ * Used when the body bounding box covers the entire image (raw photo
+ * fallback) so sizing depends on actual head size rather than photo
+ * crop. Combined with the heightCm ratio multiplier on top.
+ */
+const FACE_AS_METRIC_FRAC = 0.10;
 
 /** Minimum visibility for a MediaPipe pose landmark to be trusted (0..1). */
 const POSE_MIN_VIS = 0.35;
@@ -437,14 +444,52 @@ function ScaledCutout({
         ? (side === 'A' ? heightA : heightB) / Math.max(heightA, heightB)
         : 1;
 
-    // ──────────── Strategy 1: pose anchor + body-bbox scale (best) ────────────
+    // Detect "raw-photo" body bboxes (no bg removal happened — body bbox
+    // covers the full image). For those, body height = photo height which
+    // depends on crop, so we'd lose comparability. Switch to head-as-metric
+    // instead: scale by detected face size.
+    const poseAnchor = pose ? extractPoseAnchor(pose) : null;
+    const isRawPhotoBbox =
+      !!body && body.x === 0 && body.y === 0 &&
+      body.width === body.imgW && body.height === body.imgH;
+
+    // ──────────── Strategy 0: head-as-metric (raw photos with face) ────────────
+    if (isRawPhotoBbox && face) {
+      let scale = (size.h * FACE_AS_METRIC_FRAC) / face.height;
+      scale *= heightRatio;
+      scale *= sizeAdjust;
+
+      imgWidth = face.imgW * scale;
+      imgHeight = face.imgH * scale;
+
+      // Ground line via ankle if pose found one, else face anchor.
+      let ty: number;
+      if (poseAnchor?.ankleMidY != null) {
+        ty = size.h * GROUND_LINE - poseAnchor.ankleMidY * scale;
+      } else {
+        const faceCenterYScaled = (face.y + face.height / 2) * scale;
+        ty = size.h * HEAD_VERTICAL_POS - faceCenterYScaled;
+      }
+
+      const faceCenterXScaled = (face.x + face.width / 2) * scale;
+      const targetX =
+        side === 'A'
+          ? size.w * (0.5 + BODY_INWARD_BIAS)
+          : size.w * (0.5 - BODY_INWARD_BIAS);
+      const tx = targetX - faceCenterXScaled;
+
+      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
+      positioned = true;
+      strategy = 'face';
+    }
+
+    // ──────────── Strategy 1: pose anchor + body-bbox scale (cutouts) ────────────
     // Body bbox drives scale (consistent across photos shot at different
     // zoom levels); ankle midpoint drives vertical alignment so both
     // athletes' feet land on the same line; body bbox center drives
     // horizontal so sideways lean doesn't shift the figure.
     // Falls back to body bbox bottom for vertical when ankles aren't visible.
-    const poseAnchor = pose ? extractPoseAnchor(pose) : null;
-    if (poseAnchor && body) {
+    else if (poseAnchor && body) {
       let scale = (size.h * BODY_FILL_FRAC) / body.height;
       scale *= heightRatio;
       scale *= sizeAdjust;
