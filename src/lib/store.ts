@@ -1,127 +1,190 @@
 'use client';
 
-import { create } from 'zustand';
+import { createContext, createElement, useContext, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { create, useStore as useZustandStore } from 'zustand';
+import type { StoreApi } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AthletePhoto, Margin, Match, Outcome, Side } from '@/types';
 import { buildInitialRows, POSES } from './constants';
 
 const DEFAULT_POSE_ID = POSES[0]?.id ?? 'FDB';
 
-type State = Match & {
+export type State = Match & {
   setName: (side: Side, name: string) => void;
   setHeight: (side: Side, heightCm: number | undefined, source: 'auto' | 'manual') => void;
   setSizeAdjust: (side: Side, sizeAdjust: number) => void;
 
-  /** Replace (or insert) the photo for a side at a given pose. */
   setPhoto: (side: Side, poseId: string, photo: AthletePhoto) => void;
-  /** Remove the photo for a side at a given pose. */
   clearPhoto: (side: Side, poseId: string) => void;
-  /** Update the manual X/Y offset of a stored photo. Pass undefined to reset. */
   setPhotoOffset: (
     side: Side,
     poseId: string,
     offsetX: number | undefined,
     offsetY: number | undefined,
   ) => void;
-  /** Switch which pose tab is active in the comparison stage. */
   setCurrentPose: (poseId: string) => void;
 
   setWinner: (rowId: string, winner: Outcome | null) => void;
   setMargin: (rowId: string, margin: Margin | null) => void;
   setRow: (rowId: string, winner: Outcome | null, margin: Margin | null) => void;
+
   reset: () => void;
   resetAll: () => void;
 };
 
-export const useScorecard = create<State>((set) => ({
-  athleteA: { name: 'Athlete A' },
-  athleteB: { name: 'Athlete B' },
-  rows: buildInitialRows(),
-  currentPoseId: DEFAULT_POSE_ID,
+function defaultState(): Match {
+  return {
+    athleteA: { name: 'Athlete A' },
+    athleteB: { name: 'Athlete B' },
+    rows: buildInitialRows(),
+    currentPoseId: DEFAULT_POSE_ID,
+  };
+}
 
-  setName: (side, name) =>
-    set((s) => {
-      // Reset auto-detected height when the name changes; manual stays sticky.
-      const a = s.athleteA;
-      const b = s.athleteB;
-      const clearAuto = (athlete: typeof a) =>
-        athlete.heightSource === 'manual'
-          ? { ...athlete, name }
-          : { ...athlete, name, heightCm: undefined, heightSource: undefined };
-      return side === 'A'
-        ? { athleteA: clearAuto(a) }
-        : { athleteB: clearAuto(b) };
-    }),
+/**
+ * Build a fresh Zustand store scoped to a single judge.
+ * Each judge gets their own localStorage key so scoring data, photos,
+ * names, and per-pose nudges all stay isolated across judges.
+ */
+function createScorecardStore(judgeId: string) {
+  return create<State>()(
+    persist(
+      (set) => ({
+        ...defaultState(),
 
-  setHeight: (side, heightCm, source) =>
-    set((s) =>
-      side === 'A'
-        ? { athleteA: { ...s.athleteA, heightCm, heightSource: source } }
-        : { athleteB: { ...s.athleteB, heightCm, heightSource: source } },
+        setName: (side, name) =>
+          set((s) => {
+            const a = s.athleteA;
+            const b = s.athleteB;
+            const clearAuto = (athlete: typeof a) =>
+              athlete.heightSource === 'manual'
+                ? { ...athlete, name }
+                : { ...athlete, name, heightCm: undefined, heightSource: undefined };
+            return side === 'A'
+              ? { athleteA: clearAuto(a) }
+              : { athleteB: clearAuto(b) };
+          }),
+
+        setHeight: (side, heightCm, source) =>
+          set((s) =>
+            side === 'A'
+              ? { athleteA: { ...s.athleteA, heightCm, heightSource: source } }
+              : { athleteB: { ...s.athleteB, heightCm, heightSource: source } },
+          ),
+
+        setSizeAdjust: (side, sizeAdjust) =>
+          set((s) =>
+            side === 'A'
+              ? { athleteA: { ...s.athleteA, sizeAdjust } }
+              : { athleteB: { ...s.athleteB, sizeAdjust } },
+          ),
+
+        setPhoto: (side, poseId, photo) =>
+          set((s) => {
+            const target = side === 'A' ? s.athleteA : s.athleteB;
+            const updatedPhotos = { ...(target.photos ?? {}), [poseId]: photo };
+            return side === 'A'
+              ? { athleteA: { ...target, photos: updatedPhotos } }
+              : { athleteB: { ...target, photos: updatedPhotos } };
+          }),
+
+        clearPhoto: (side, poseId) =>
+          set((s) => {
+            const target = side === 'A' ? s.athleteA : s.athleteB;
+            if (!target.photos?.[poseId]) return {};
+            const rest = { ...target.photos };
+            delete rest[poseId];
+            return side === 'A'
+              ? { athleteA: { ...target, photos: rest } }
+              : { athleteB: { ...target, photos: rest } };
+          }),
+
+        setPhotoOffset: (side, poseId, offsetX, offsetY) =>
+          set((s) => {
+            const target = side === 'A' ? s.athleteA : s.athleteB;
+            const existing = target.photos?.[poseId];
+            if (!existing) return {};
+            const updated: AthletePhoto = { ...existing, offsetX, offsetY };
+            const photos = { ...target.photos, [poseId]: updated };
+            return side === 'A'
+              ? { athleteA: { ...target, photos } }
+              : { athleteB: { ...target, photos } };
+          }),
+
+        setCurrentPose: (poseId) => set({ currentPoseId: poseId }),
+
+        setWinner: (rowId, winner) =>
+          set((s) => ({
+            rows: s.rows.map((r) => (r.id === rowId ? { ...r, winner } : r)),
+          })),
+
+        setMargin: (rowId, margin) =>
+          set((s) => ({
+            rows: s.rows.map((r) => (r.id === rowId ? { ...r, margin } : r)),
+          })),
+
+        setRow: (rowId, winner, margin) =>
+          set((s) => ({
+            rows: s.rows.map((r) => (r.id === rowId ? { ...r, winner, margin } : r)),
+          })),
+
+        reset: () => set({ rows: buildInitialRows() }),
+
+        resetAll: () => set(defaultState()),
+      }),
+      {
+        name: `scorecard:${judgeId}`,
+        storage: createJSONStorage(() => localStorage),
+        // Persist only the Match data — actions are recreated on hydrate.
+        partialize: (state) => ({
+          athleteA: state.athleteA,
+          athleteB: state.athleteB,
+          rows: state.rows,
+          currentPoseId: state.currentPoseId,
+        }),
+        version: 1,
+        skipHydration: false,
+      },
     ),
+  );
+}
 
-  setSizeAdjust: (side, sizeAdjust) =>
-    set((s) =>
-      side === 'A'
-        ? { athleteA: { ...s.athleteA, sizeAdjust } }
-        : { athleteB: { ...s.athleteB, sizeAdjust } },
-    ),
+// ─────────────────────────────────────────────────────────────────────────────
+// React context wiring
+// Each ScorecardPage creates a store for its judge and provides it through
+// context. Consumers keep the existing `useScorecard(s => ...)` API.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  setPhoto: (side, poseId, photo) =>
-    set((s) => {
-      const target = side === 'A' ? s.athleteA : s.athleteB;
-      const updatedPhotos = { ...(target.photos ?? {}), [poseId]: photo };
-      return side === 'A'
-        ? { athleteA: { ...target, photos: updatedPhotos } }
-        : { athleteB: { ...target, photos: updatedPhotos } };
-    }),
+const ScorecardStoreContext = createContext<StoreApi<State> | null>(null);
 
-  clearPhoto: (side, poseId) =>
-    set((s) => {
-      const target = side === 'A' ? s.athleteA : s.athleteB;
-      if (!target.photos?.[poseId]) return {};
-      const rest = { ...target.photos };
-      delete rest[poseId];
-      return side === 'A'
-        ? { athleteA: { ...target, photos: rest } }
-        : { athleteB: { ...target, photos: rest } };
-    }),
+export function ScorecardStoreProvider({
+  judgeId,
+  children,
+}: {
+  judgeId: string;
+  children: ReactNode;
+}) {
+  // Memo by judgeId so switching judges (or routes) gives a fresh hydrated store.
+  const store = useMemo(() => createScorecardStore(judgeId), [judgeId]);
+  return createElement(
+    ScorecardStoreContext.Provider,
+    { value: store },
+    children,
+  );
+}
 
-  setPhotoOffset: (side, poseId, offsetX, offsetY) =>
-    set((s) => {
-      const target = side === 'A' ? s.athleteA : s.athleteB;
-      const existing = target.photos?.[poseId];
-      if (!existing) return {};
-      const updated: AthletePhoto = { ...existing, offsetX, offsetY };
-      const photos = { ...target.photos, [poseId]: updated };
-      return side === 'A'
-        ? { athleteA: { ...target, photos } }
-        : { athleteB: { ...target, photos } };
-    }),
-
-  setCurrentPose: (poseId) => set({ currentPoseId: poseId }),
-
-  setWinner: (rowId, winner) =>
-    set((s) => ({
-      rows: s.rows.map((r) => (r.id === rowId ? { ...r, winner } : r)),
-    })),
-
-  setMargin: (rowId, margin) =>
-    set((s) => ({
-      rows: s.rows.map((r) => (r.id === rowId ? { ...r, margin } : r)),
-    })),
-
-  setRow: (rowId, winner, margin) =>
-    set((s) => ({
-      rows: s.rows.map((r) => (r.id === rowId ? { ...r, winner, margin } : r)),
-    })),
-
-  reset: () => set({ rows: buildInitialRows() }),
-
-  resetAll: () =>
-    set({
-      athleteA: { name: 'Athlete A' },
-      athleteB: { name: 'Athlete B' },
-      rows: buildInitialRows(),
-      currentPoseId: DEFAULT_POSE_ID,
-    }),
-}));
+/**
+ * Read from / dispatch to the active judge's scorecard store.
+ *
+ * Drop-in replacement for the previous global `useScorecard` — same selector
+ * API, but the underlying store is the one provided by the nearest
+ * `ScorecardStoreProvider` in the tree.
+ */
+export function useScorecard<T>(selector: (state: State) => T): T {
+  const store = useContext(ScorecardStoreContext);
+  if (!store) {
+    throw new Error('useScorecard must be used inside <ScorecardStoreProvider>');
+  }
+  return useZustandStore(store, selector);
+}

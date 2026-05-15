@@ -5,6 +5,7 @@ export const metadata = { title: 'Superchat · Scorecard' };
 export default function Page() {
   return (
     <ScorecardPage
+      judgeId="superchat"
       themeClass="theme-superchat"
       brand="Superchat"
       brandLine1="Superchat"

@@ -5,6 +5,7 @@ export const metadata = { title: 'Project: Bodybuilding · Scorecard' };
 export default function Page() {
   return (
     <ScorecardPage
+      judgeId="project-bodybuilding"
       themeClass="theme-project-bodybuilding"
       brand="Project: Bodybuilding"
       brandLine1="Project:"
