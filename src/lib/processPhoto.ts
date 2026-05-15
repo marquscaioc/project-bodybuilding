@@ -52,11 +52,13 @@ export async function processPhoto(
     const cutoutBlob = await removeBackground(file, {
       publicPath: IMGLY_PUBLIC_PATH,
       debug: false,
+      // Run inference on the main thread instead of spawning a Web Worker —
+      // production webpack mangles the worker URL constructor (`new d.U` in
+      // the trace), causing TypeError: e.replace is not a function.
+      proxyToWorker: false,
+      device: 'cpu',
       progress: (key, current, total) => {
-        // Surface model download progress to the console for debugging.
-        if (current === total) {
-          console.info(`[imgly] loaded ${key}`);
-        }
+        if (current === total) console.info(`[imgly] loaded ${key}`);
       },
     });
     const cutoutUrl = await blobToDataUrl(cutoutBlob);
