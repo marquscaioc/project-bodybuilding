@@ -235,69 +235,55 @@ function ScorecardTile({
     <Link
       href={href}
       title={`Open ${brand}`}
-      className={`theme-wrap group relative block overflow-hidden border border-[var(--rule-strong)] bg-[var(--bg)] transition hover:border-[var(--mosaic-1,var(--accent))] ${themeClass ?? ''}`}
-      style={themeStyle}
+      className={`theme-wrap group relative flex items-center gap-2 overflow-hidden border border-[var(--rule-strong)] bg-[var(--bg)] px-2 py-1.5 transition hover:border-[var(--mosaic-1,var(--accent))] ${themeClass ?? ''}`}
+      style={{
+        ...themeStyle,
+        background:
+          'linear-gradient(110deg, var(--mosaic-5, var(--bg-glow)) 0%, var(--bg) 70%)',
+      }}
     >
-      <div
-        className="relative flex items-center gap-3 p-3"
-        style={{
-          background:
-            'linear-gradient(160deg, var(--mosaic-5, var(--bg-glow)) 0%, var(--bg) 90%)',
-        }}
-      >
-        {logoSrc ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={logoSrc}
-            alt=""
-            className="h-10 w-10 shrink-0 rounded-full object-cover"
-            style={{
-              boxShadow:
-                '0 0 0 1.5px var(--mosaic-1, var(--accent)), 0 0 14px -4px var(--mosaic-1, var(--accent))',
-            }}
-          />
-        ) : (
-          <span
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs uppercase tracking-[0.15em]"
-            style={{
-              background: 'var(--mosaic-5, var(--bg-glow))',
-              border: '1.5px solid var(--mosaic-1, var(--accent))',
-              color: 'var(--mosaic-3, var(--accent))',
-            }}
-          >
-            {brandLine1.slice(0, 2)}
-          </span>
-        )}
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className="truncate font-display text-base uppercase tracking-[0.04em] text-[var(--fg)]">
-            {brandLine1}
-          </span>
-          <span className="truncate font-display text-[0.65rem] uppercase tracking-[0.18em] text-[var(--mosaic-3,var(--accent))]">
+      {logoSrc ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={logoSrc}
+          alt=""
+          className="h-7 w-7 shrink-0 rounded-full object-cover"
+          style={{ boxShadow: '0 0 0 1.5px var(--mosaic-1, var(--accent))' }}
+        />
+      ) : (
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full font-display text-[0.6rem] uppercase tracking-[0.15em]"
+          style={{
+            background: 'var(--mosaic-5, var(--bg-glow))',
+            border: '1.5px solid var(--mosaic-1, var(--accent))',
+            color: 'var(--mosaic-3, var(--accent))',
+          }}
+        >
+          {brandLine1.slice(0, 2)}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate font-display text-sm uppercase tracking-[0.08em] text-[var(--fg)]">
+        {brandLine1}
+        {brandLine2 && (
+          <span className="ml-1.5 text-[0.6rem] tracking-[0.18em] text-[var(--mosaic-3,var(--accent))]">
             {brandLine2}
           </span>
-        </div>
-      </div>
-      <div className="flex items-center justify-between border-t border-[var(--rule)] bg-black/50 px-3 py-1.5">
-        <span className="flex items-center gap-1 text-[0.55rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
-          {locked && (
-            <>
-              <LockIcon />
-              Password
-            </>
-          )}
+        )}
+      </span>
+      {locked && (
+        <span
+          aria-label="Password protected"
+          className="shrink-0 text-[var(--fg-mute)] group-hover:text-[var(--mosaic-1,var(--accent))]"
+        >
+          <LockIcon />
         </span>
-        <span className="font-display text-[0.55rem] uppercase tracking-[0.25em] text-[var(--fg-dim)] group-hover:text-[var(--mosaic-1,var(--accent))]">
-          Open →
-        </span>
-      </div>
-      {/* Mosaic strip */}
-      <div className="flex h-0.5">
-        <span className="flex-1" style={{ background: 'var(--mosaic-1, var(--accent))' }} />
-        <span className="flex-1" style={{ background: 'var(--mosaic-2, var(--accent))' }} />
-        <span className="flex-1" style={{ background: 'var(--mosaic-3, var(--accent))' }} />
-        <span className="flex-1" style={{ background: 'var(--mosaic-4, var(--accent))' }} />
-        <span className="flex-1" style={{ background: 'var(--mosaic-5, var(--accent))' }} />
-      </div>
+      )}
+      {/* Thin mosaic strip on the left edge for color signature */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-0.5"
+        style={{ background: 'var(--mosaic-1, var(--accent))' }}
+      />
     </Link>
   );
 }
