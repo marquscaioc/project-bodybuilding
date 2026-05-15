@@ -1,0 +1,111 @@
+'use client';
+
+import type { BodyBox, FaceBox, Pose } from '@/types';
+import { detectFace } from './faceDetect';
+import { detectPose } from './poseDetect';
+import { loadImage } from './loadImage';
+
+export type ProcessedPhoto = {
+  /** data: URL of the background-removed cutout (transparent PNG). */
+  cutoutUrl: string;
+  /** Face bounding box in cutout pixel coordinates, or null if undetected. */
+  face: FaceBox | null;
+  /** Tight bounding box around the visible (non-transparent) subject. */
+  body: BodyBox;
+  /** 33 MediaPipe pose landmarks, or null if no body detected. */
+  pose: Pose | null;
+};
+
+export type ProgressStage =
+  | 'removing-bg'
+  | 'measuring-body'
+  | 'detecting-face'
+  | 'detecting-pose'
+  | 'done';
+
+export async function processPhoto(
+  file: File,
+  onProgress?: (stage: ProgressStage) => void,
+): Promise<ProcessedPhoto> {
+  onProgress?.('removing-bg');
+  const { removeBackground } = await import('@imgly/background-removal');
+  const cutoutBlob = await removeBackground(file);
+  const cutoutUrl = await blobToDataUrl(cutoutBlob);
+
+  onProgress?.('measuring-body');
+  const body = await computeBodyBoundingBox(cutoutUrl);
+
+  onProgress?.('detecting-face');
+  const face = await detectFace(cutoutUrl);
+
+  onProgress?.('detecting-pose');
+  const pose = await detectPose(cutoutUrl);
+
+  onProgress?.('done');
+  return { cutoutUrl, face, body, pose };
+}
+
+/**
+ * Scan the cutout's alpha channel and return the tight bounding box
+ * around all visible (non-transparent) pixels. Used as a fallback when
+ * pose/face detection fails.
+ */
+async function computeBodyBoundingBox(dataUrl: string): Promise<BodyBox> {
+  const img = await loadImage(dataUrl);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: false });
+  if (!ctx) {
+    return { x: 0, y: 0, width: w, height: h, imgW: w, imgH: h };
+  }
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  const ALPHA_THRESHOLD = 24;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < h; y++) {
+    const rowStart = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      const a = data[rowStart + x * 4 + 3];
+      if (a > ALPHA_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < 0) {
+    return { x: 0, y: 0, width: w, height: h, imgW: w, imgH: h };
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+    imgW: w,
+    imgH: h,
+  };
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Failed to read processed blob'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
+}
