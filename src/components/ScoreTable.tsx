@@ -42,7 +42,7 @@ export function ScoreTable({
           </colgroup>
           {showHeader && (
             <thead>
-              <tr className="bg-[var(--strip-bg)] text-[var(--strip-fg)]">
+              <tr className="bg-[var(--strip-bg)] text-white">
                 <th className="border-r border-black/30 px-3 py-2 text-left">
                   <span className="font-display text-sm uppercase tracking-[0.25em] opacity-60">
                     Row
@@ -96,7 +96,7 @@ export function ScoreTable({
               </tr>
             ))}
 
-            <tr className="border-t border-[var(--rule-strong)] bg-[var(--strip-bg)] text-[var(--strip-fg)]">
+            <tr className="border-t border-[var(--rule-strong)] bg-[var(--strip-bg)] text-white">
               <th
                 scope="row"
                 className="border-r border-black/30 px-3 py-2 text-left font-display text-lg uppercase tracking-[0.3em]"
