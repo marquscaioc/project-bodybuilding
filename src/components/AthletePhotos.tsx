@@ -461,57 +461,67 @@ function ScaledCutout({
       !!body && body.x === 0 && body.y === 0 &&
       body.width === body.imgW && body.height === body.imgH;
 
-    // Collect every scale candidate we can derive from the available
-    // metrics. Each candidate is "what scale would make THIS metric land
-    // on its expected fraction of the slot". Geometric mean across them
-    // robustifies against any single noisy/biased source.
-    const candidates: Array<{ name: string; scale: number }> = [];
+    // Two classes of measurements:
+    //
+    // DIRECT: pixel-perfect estimates of the subject's full body height
+    // in the source image. These agree across athletes regardless of
+    // individual head/torso proportions, so they can be safely blended
+    // for denoising.
+    //   - body bbox height   (when bg removal gave a real cutout)
+    //   - pose head-to-ankle (face bbox top → ankle midpoint)
+    //
+    // PROPORTIONAL: scales derived by assuming a fixed body→part ratio
+    // (face ≈ 10% of body height, torso ≈ 24%). The assumption is rough
+    // and varies between people — using these as primary scale makes
+    // athletes with bigger/smaller heads render proportionally larger or
+    // smaller. So they only fire when no DIRECT estimate is available
+    // (e.g. raw-photo fallback with no pose ankles).
+    const directBodyHeights: Array<{ name: string; px: number }> = [];
 
-    // 1. Body bbox height — only when bg removal produced a real cutout.
     if (body && !isRawPhotoBbox && body.height > 0) {
-      candidates.push({
-        name: 'body',
-        scale: (size.h * BODY_FILL_FRAC) / body.height,
-      });
+      directBodyHeights.push({ name: 'body', px: body.height });
     }
-
-    // 2. Face height (head-as-metric) — crop-invariant.
-    if (face && face.height > 0) {
-      candidates.push({
-        name: 'face',
-        scale: (size.h * FACE_AS_METRIC_FRAC) / face.height,
-      });
-    }
-
-    // 3. Pose torso length (shoulder→hip) — invariant to limb crops.
-    if (poseAnchor && poseAnchor.torsoLength > 0) {
-      candidates.push({
-        name: 'torso',
-        scale: (size.h * TORSO_FRAC) / poseAnchor.torsoLength,
-      });
-    }
-
-    // 4. Pose head-to-ankle height — uses face bbox top as head crown.
     if (poseAnchor && poseAnchor.ankleMidY != null && face) {
-      const poseBodyPx = poseAnchor.ankleMidY - face.y;
-      if (poseBodyPx > 0) {
-        candidates.push({
-          name: 'h2a',
-          scale: (size.h * BODY_FILL_FRAC) / poseBodyPx,
-        });
+      const headToAnkle = poseAnchor.ankleMidY - face.y;
+      if (headToAnkle > 0) {
+        directBodyHeights.push({ name: 'h2a', px: headToAnkle });
       }
     }
 
-    // Pick base scale: HEAD-only override, else geometric mean of all.
     let baseScale: number | null = null;
-    if (sizeMode === 'head') {
-      const faceCandidate = candidates.find((c) => c.name === 'face');
-      baseScale = faceCandidate?.scale
-        ?? geometricMean(candidates.map((c) => c.scale)); // fallback if no face
+
+    if (sizeMode === 'head' && face && face.height > 0) {
+      // Forced head-as-metric. Useful when AUTO blends across photos
+      // with very different crops and you want to anchor on heads only.
+      baseScale = (size.h * FACE_AS_METRIC_FRAC) / face.height;
       strategy = 'HEAD';
-    } else if (candidates.length > 0) {
-      baseScale = geometricMean(candidates.map((c) => c.scale));
-      strategy = `AUTO·${candidates.length}`;
+    } else if (directBodyHeights.length > 0) {
+      // Geometric mean of direct body-height estimates → denoised body
+      // height, then scaled so the body fills BODY_FILL_FRAC of the slot.
+      const meanBodyHeightPx = geometricMean(
+        directBodyHeights.map((d) => d.px),
+      );
+      baseScale = (size.h * BODY_FILL_FRAC) / meanBodyHeightPx;
+      strategy =
+        directBodyHeights.length > 1
+          ? `AUTO·${directBodyHeights.map((d) => d.name).join('+')}`
+          : `AUTO·${directBodyHeights[0].name}`;
+    } else {
+      // No direct body-height measurement — fall back to proportional
+      // metrics. This branch hits when bg removal failed AND we don't
+      // have face+ankles to triangulate. We blend whatever's left so a
+      // raw-photo upload still gets reasonable sizing.
+      const proportional: number[] = [];
+      if (face && face.height > 0) {
+        proportional.push((size.h * FACE_AS_METRIC_FRAC) / face.height);
+      }
+      if (poseAnchor && poseAnchor.torsoLength > 0) {
+        proportional.push((size.h * TORSO_FRAC) / poseAnchor.torsoLength);
+      }
+      if (proportional.length > 0) {
+        baseScale = geometricMean(proportional);
+        strategy = `FALLBACK·${proportional.length}`;
+      }
     }
 
     if (baseScale != null) {
