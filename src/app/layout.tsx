@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Bebas_Neue } from 'next/font/google';
+import { Inter, Bebas_Neue, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -15,6 +15,13 @@ const bebas = Bebas_Neue({
   display: 'swap',
 });
 
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+  weight: ['400', '500', '700'],
+});
+
 export const metadata: Metadata = {
   title: 'Scorecard',
   description: 'Live pairwise scoring for 1v1 bodybuilder comparisons.',
@@ -25,7 +32,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} ${bebas.variable}`}>{children}</body>
+      <body className={`${inter.variable} ${bebas.variable} ${mono.variable}`}>
+        {children}
+      </body>
     </html>
   );
 }
