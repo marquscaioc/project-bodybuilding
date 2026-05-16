@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { Athlete, BodyBox, FaceBox, Pose, Side, SizeMode } from '@/types';
+import type { Athlete, BodyBox, FaceBox, Pose, PoseLandmark, Side } from '@/types';
 import { useScorecard } from '@/lib/store';
 import { processPhoto, type ProgressStage } from '@/lib/processPhoto';
 import { POSE } from '@/lib/poseDetect';
@@ -54,8 +54,6 @@ const SIZE_STEP = 0.02;
 
 export function AthletePhotos() {
   const [importerOpen, setImporterOpen] = useState(false);
-  const sizeMode = useScorecard((s) => s.sizeMode ?? 'auto');
-  const setSizeMode = useScorecard((s) => s.setSizeMode);
 
   return (
     <section
@@ -77,16 +75,13 @@ export function AthletePhotos() {
         <span className="font-display text-[0.65rem] uppercase tracking-[0.3em] text-[var(--fg-dim)]">
           Comparison Stage
         </span>
-        <div className="flex flex-wrap items-center gap-2">
-          <SizeModeToggle value={sizeMode} onChange={setSizeMode} />
-          <button
-            type="button"
-            onClick={() => setImporterOpen(true)}
-            className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
-          >
-            Import from gallery URL
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setImporterOpen(true)}
+          className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
+        >
+          Import from gallery URL
+        </button>
       </div>
 
       <PoseTabs />
@@ -432,7 +427,16 @@ function ScaledCutout({
   const sizeAdjust = useScorecard((s) =>
     side === 'A' ? s.athleteA.sizeAdjust ?? 1 : s.athleteB.sizeAdjust ?? 1,
   );
-  const sizeMode = useScorecard((s) => s.sizeMode ?? 'auto');
+
+  // Pair-aware: read the OTHER athlete's photo at the same pose so we
+  // can pick a common ground reference (both use ankle Y, or both use
+  // body-bbox bottom). Without this, A could anchor on ankle while B
+  // anchors on bbox bottom — same GROUND_LINE target but different
+  // image-pixel anchors → feet land at different visual heights.
+  const otherPhoto = useScorecard((s) => {
+    const other = side === 'A' ? s.athleteB : s.athleteA;
+    return other.photos?.[s.currentPoseId];
+  });
 
   useResizeObserver(containerRef, (entry) =>
     setSize({ w: entry.contentRect.width, h: entry.contentRect.height }),
@@ -455,6 +459,8 @@ function ScaledCutout({
         : 1;
 
     const poseAnchor = pose ? extractPoseAnchor(pose) : null;
+    const poseBBox = pose ? extractPoseBBox(pose) : null;
+
     // Raw-photo body bbox (no bg removal — covers full image). Body height
     // would equal the photo crop, so it's unreliable as a scale metric.
     const isRawPhotoBbox =
@@ -469,13 +475,13 @@ function ScaledCutout({
     // for denoising.
     //   - body bbox height   (when bg removal gave a real cutout)
     //   - pose head-to-ankle (face bbox top → ankle midpoint)
+    //   - pose visible bbox  (top of head landmark → bottom of foot landmark)
     //
     // PROPORTIONAL: scales derived by assuming a fixed body→part ratio
-    // (face ≈ 10% of body height, torso ≈ 24%). The assumption is rough
-    // and varies between people — using these as primary scale makes
-    // athletes with bigger/smaller heads render proportionally larger or
-    // smaller. So they only fire when no DIRECT estimate is available
-    // (e.g. raw-photo fallback with no pose ankles).
+    // (face ≈ 10% of body height, torso ≈ 24%). The assumption varies
+    // between people — using these as primary scale makes athletes with
+    // bigger/smaller heads render proportionally larger or smaller. So
+    // they only fire when no DIRECT estimate is available.
     const directBodyHeights: Array<{ name: string; px: number }> = [];
 
     if (body && !isRawPhotoBbox && body.height > 0) {
@@ -487,25 +493,27 @@ function ScaledCutout({
         directBodyHeights.push({ name: 'h2a', px: headToAnkle });
       }
     }
+    if (poseBBox) {
+      const poseHeight = poseBBox.bottomY - poseBBox.topY;
+      if (poseHeight > 0) {
+        directBodyHeights.push({ name: 'pbb', px: poseHeight });
+      }
+    }
 
     let baseScale: number | null = null;
 
-    if (sizeMode === 'head' && face && face.height > 0) {
-      // Forced head-as-metric. Useful when AUTO blends across photos
-      // with very different crops and you want to anchor on heads only.
-      baseScale = (size.h * FACE_AS_METRIC_FRAC) / face.height;
-      strategy = 'HEAD';
-    } else if (directBodyHeights.length > 0) {
-      // Geometric mean of direct body-height estimates → denoised body
-      // height, then scaled so the body fills BODY_FILL_FRAC of the slot.
-      const meanBodyHeightPx = geometricMean(
-        directBodyHeights.map((d) => d.px),
-      );
+    if (directBodyHeights.length > 0) {
+      // Outlier rejection (when 3+) → geometric mean of remaining
+      // direct body-height estimates → denoised body height, then
+      // scaled so the body fills BODY_FILL_FRAC of the slot.
+      const rawPx = directBodyHeights.map((d) => d.px);
+      const cleaned = rejectOutliers(rawPx);
+      const meanBodyHeightPx = geometricMean(cleaned);
       baseScale = (size.h * BODY_FILL_FRAC) / meanBodyHeightPx;
-      strategy =
-        directBodyHeights.length > 1
-          ? `AUTO·${directBodyHeights.map((d) => d.name).join('+')}`
-          : `AUTO·${directBodyHeights[0].name}`;
+      const usedNames = directBodyHeights
+        .filter((d) => cleaned.includes(d.px))
+        .map((d) => d.name);
+      strategy = `AUTO·${usedNames.join('+')}`;
     } else {
       // No direct body-height measurement — fall back to proportional
       // metrics. This branch hits when bg removal failed AND we don't
@@ -533,16 +541,62 @@ function ScaledCutout({
       imgWidth = imgW * scale;
       imgHeight = imgH * scale;
 
-      // Vertical: ankle midpoint > body bbox bottom > face anchor.
-      let ty: number;
-      if (poseAnchor?.ankleMidY != null) {
-        ty = size.h * GROUND_LINE - poseAnchor.ankleMidY * scale;
-      } else if (body && !isRawPhotoBbox) {
-        ty = size.h * GROUND_LINE - (body.y + body.height) * scale;
+      // ──────────── Pair-aware ground anchor ────────────
+      // The two athletes must use the SAME type of ground reference or
+      // their feet land at different heights. Probe what's available on
+      // both sides and pick the most reliable shared type.
+      const otherPose = otherPhoto?.pose
+        ? extractPoseAnchor(otherPhoto.pose)
+        : null;
+      const otherPoseBBox = otherPhoto?.pose
+        ? extractPoseBBox(otherPhoto.pose)
+        : null;
+      const otherIsRawBbox =
+        !!otherPhoto?.body &&
+        otherPhoto.body.x === 0 &&
+        otherPhoto.body.y === 0 &&
+        otherPhoto.body.width === otherPhoto.body.imgW &&
+        otherPhoto.body.height === otherPhoto.body.imgH;
+
+      const meHasAnkle = poseAnchor?.ankleMidY != null;
+      const otherHasAnkle = otherPose?.ankleMidY != null;
+      const meHasPoseBottom = poseBBox != null;
+      const otherHasPoseBottom = otherPoseBBox != null;
+      const meHasBodyBottom = !!body && !isRawPhotoBbox;
+      const otherHasBodyBottom = !!otherPhoto?.body && !otherIsRawBbox;
+
+      // Pick the highest-fidelity ground type that BOTH sides have.
+      // If the other side isn't uploaded yet, fall back to our best.
+      const otherPresent = !!otherPhoto;
+      let groundType: 'ankle' | 'pose-bbox' | 'body-bbox' | 'face' | 'none';
+      if (meHasAnkle && (!otherPresent || otherHasAnkle)) {
+        groundType = 'ankle';
+      } else if (meHasPoseBottom && (!otherPresent || otherHasPoseBottom)) {
+        groundType = 'pose-bbox';
+      } else if (meHasBodyBottom && (!otherPresent || otherHasBodyBottom)) {
+        groundType = 'body-bbox';
       } else if (face) {
-        ty = size.h * HEAD_VERTICAL_POS - (face.y + face.height / 2) * scale;
+        groundType = 'face';
       } else {
-        ty = 0;
+        groundType = 'none';
+      }
+
+      let ty: number;
+      switch (groundType) {
+        case 'ankle':
+          ty = size.h * GROUND_LINE - poseAnchor!.ankleMidY! * scale;
+          break;
+        case 'pose-bbox':
+          ty = size.h * GROUND_LINE - poseBBox!.bottomY * scale;
+          break;
+        case 'body-bbox':
+          ty = size.h * GROUND_LINE - (body!.y + body!.height) * scale;
+          break;
+        case 'face':
+          ty = size.h * HEAD_VERTICAL_POS - (face!.y + face!.height / 2) * scale;
+          break;
+        default:
+          ty = 0;
       }
 
       // Horizontal: body bbox center > face center > image center.
@@ -615,56 +669,6 @@ function ScaledCutout({
 }
 
 /**
- * Two-state pill toggle for the stage-wide sizing strategy.
- * AUTO blends every detected metric (body bbox, face, pose torso, pose
- * head-to-ankle). HEAD forces face-as-metric for crop-invariant sizing
- * when the auto blend pushes one athlete bigger than the other.
- */
-function SizeModeToggle({
-  value,
-  onChange,
-}: {
-  value: SizeMode;
-  onChange: (mode: SizeMode) => void;
-}) {
-  const options: Array<{ id: SizeMode; label: string; hint: string }> = [
-    { id: 'auto', label: 'Auto', hint: 'Blend body + face + pose' },
-    { id: 'head', label: 'Head', hint: 'Force head-as-metric (crop-invariant)' },
-  ];
-  return (
-    <div
-      role="group"
-      aria-label="Auto-sizing strategy"
-      className="inline-flex items-center border border-[var(--rule)] bg-black/40"
-    >
-      <span className="border-r border-[var(--rule)] px-2 py-1 font-display text-[0.55rem] uppercase tracking-[0.3em] text-[var(--fg-mute)]">
-        Auto-size
-      </span>
-      {options.map((o) => {
-        const active = o.id === value;
-        return (
-          <button
-            key={o.id}
-            type="button"
-            onClick={() => onChange(o.id)}
-            title={o.hint}
-            aria-pressed={active}
-            className={clsx(
-              'px-2.5 py-1 font-display text-[0.6rem] uppercase tracking-[0.25em] transition',
-              active
-                ? 'bg-[var(--accent)] text-[var(--strip-fg)]'
-                : 'text-[var(--fg-dim)] hover:text-[var(--fg)]',
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
  * Geometric mean of positive numbers. Robust to a single outlier
  * candidate dragging the result far from the cluster — exp(mean(log(x)))
  * downweights extremes vs. arithmetic mean.
@@ -674,6 +678,55 @@ function geometricMean(values: number[]): number {
   let logSum = 0;
   for (const v of values) logSum += Math.log(v);
   return Math.exp(logSum / values.length);
+}
+
+/**
+ * Drop outliers from a list of estimates that should all measure the
+ * same thing. If 3+ values are present, removes any value whose ratio
+ * to the median falls outside [1 - OUTLIER_TOLERANCE, 1 + OUTLIER_TOLERANCE].
+ * Always keeps at least 2 values so a real disagreement (e.g. one bad
+ * landmark + one bad bbox) doesn't collapse to a single point.
+ */
+const OUTLIER_TOLERANCE = 0.25;
+function rejectOutliers(values: number[]): number[] {
+  if (values.length < 3) return values;
+  const sorted = [...values].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const filtered = values.filter(
+    (v) => Math.abs(v - median) / median <= OUTLIER_TOLERANCE,
+  );
+  if (filtered.length >= 2) return filtered;
+  // Fallback: keep the 2 closest to median.
+  const withDist = values
+    .map((v) => ({ v, d: Math.abs(v - median) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 2)
+    .map((x) => x.v);
+  return withDist;
+}
+
+/**
+ * Bounding box derived from every visible pose landmark — head, hands,
+ * feet, etc. Provides an additional direct body-height estimate (top of
+ * head crown ≈ min(eyes, nose, ears) Y; bottom ≈ ankle/foot Y) that does
+ * NOT depend on the bg-removal cutout or on the face detector.
+ * Returns null if too few landmarks are visible to be trustworthy.
+ */
+function extractPoseBBox(pose: Pose): { topY: number; bottomY: number } | null {
+  const visible = pose.landmarks.filter(
+    (l: PoseLandmark) => l && l.visibility >= POSE_MIN_VIS,
+  );
+  if (visible.length < 6) return null;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const l of visible) {
+    const y = l.y * pose.imgH;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return null;
+  if (maxY - minY < 24) return null;
+  return { topY: minY, bottomY: maxY };
 }
 
 /**
