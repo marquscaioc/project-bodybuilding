@@ -1,5 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { GATE_COOKIE, verifyGateToken } from '@/lib/gate';
+
+const GATED_PATHS = ['/open'];
 
 /**
  * Refresh Supabase auth tokens on every request that could need them.
@@ -8,6 +11,19 @@ import { NextResponse, type NextRequest } from 'next/server';
  * and the request continues to the page handler.
  */
 export async function middleware(req: NextRequest) {
+  // Single-password gate: block protected paths until cookie is valid.
+  const path = req.nextUrl.pathname;
+  if (GATED_PATHS.some((p) => path === p || path.startsWith(`${p}/`))) {
+    const token = req.cookies.get(GATE_COOKIE)?.value;
+    const ok = await verifyGateToken(token);
+    if (!ok) {
+      const redirect = req.nextUrl.clone();
+      redirect.pathname = '/';
+      redirect.searchParams.set('gate', 'required');
+      return NextResponse.redirect(redirect);
+    }
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 

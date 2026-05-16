@@ -53,7 +53,7 @@ export function ScoreTable({
                     value={athleteA}
                     onChange={(e) => setName('A', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-black outline-none placeholder:text-black/30 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-white outline-none placeholder:text-white/40 sm:text-2xl"
                     placeholder="Athlete A"
                     aria-label="Athlete A name"
                   />
@@ -63,7 +63,7 @@ export function ScoreTable({
                     value={athleteB}
                     onChange={(e) => setName('B', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-black outline-none placeholder:text-black/30 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-white outline-none placeholder:text-white/40 sm:text-2xl"
                     placeholder="Athlete B"
                     aria-label="Athlete B name"
                   />

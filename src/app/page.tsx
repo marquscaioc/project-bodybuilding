@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 const PANEL_FACES = ['/logos/dih.jpg', '/logos/xavier.jpg', '/logos/muscle.jpg'];
-const GATE_PASSWORD = 'projectbb123';
 
 export default function HomePage() {
   const router = useRouter();
@@ -33,16 +32,28 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password.trim().toLowerCase() === GATE_PASSWORD) {
-      setError(false);
-      setUnlocking(true);
-      setTimeout(() => router.push('/open'), 600);
-    } else {
+    if (unlocking) return;
+    setError(false);
+    setUnlocking(true);
+    try {
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        router.push('/open');
+      } else {
+        setError(true);
+        setUnlocking(false);
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    } catch {
       setError(true);
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      setUnlocking(false);
     }
   }
 
