@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { create, useStore as useZustandStore } from 'zustand';
 import type { StoreApi } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { AthletePhoto, Margin, Match, Outcome, Side } from '@/types';
+import type { AthletePhoto, Margin, Match, Outcome, Side, SizeMode } from '@/types';
 import { buildInitialRows, POSES } from './constants';
 
 const DEFAULT_POSE_ID = POSES[0]?.id ?? 'FDB';
@@ -14,6 +14,7 @@ export type State = Match & {
   setName: (side: Side, name: string) => void;
   setHeight: (side: Side, heightCm: number | undefined, source: 'auto' | 'manual') => void;
   setSizeAdjust: (side: Side, sizeAdjust: number) => void;
+  setSizeMode: (mode: SizeMode) => void;
 
   setPhoto: (side: Side, poseId: string, photo: AthletePhoto) => void;
   clearPhoto: (side: Side, poseId: string) => void;
@@ -80,6 +81,8 @@ function createScorecardStore(judgeId: string) {
               : { athleteB: { ...s.athleteB, sizeAdjust } },
           ),
 
+        setSizeMode: (sizeMode) => set({ sizeMode }),
+
         setPhoto: (side, poseId, photo) =>
           set((s) => {
             const target = side === 'A' ? s.athleteA : s.athleteB;
@@ -142,6 +145,7 @@ function createScorecardStore(judgeId: string) {
           athleteB: state.athleteB,
           rows: state.rows,
           currentPoseId: state.currentPoseId,
+          sizeMode: state.sizeMode,
         }),
         version: 1,
         skipHydration: false,

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { Athlete, BodyBox, FaceBox, Pose, Side } from '@/types';
+import type { Athlete, BodyBox, FaceBox, Pose, Side, SizeMode } from '@/types';
 import { useScorecard } from '@/lib/store';
 import { processPhoto, type ProgressStage } from '@/lib/processPhoto';
 import { POSE } from '@/lib/poseDetect';
@@ -30,11 +30,15 @@ const GROUND_LINE = 0.97;
 const HEAD_VERTICAL_POS = 0.13;
 /**
  * Head-as-metric scale: face height as a fraction of slot height.
- * Used when the body bounding box covers the entire image (raw photo
- * fallback) so sizing depends on actual head size rather than photo
- * crop. Combined with the heightCm ratio multiplier on top.
+ * Combined with the heightCm ratio multiplier on top.
  */
 const FACE_AS_METRIC_FRAC = 0.10;
+/**
+ * Pose torso (shoulder→hip) target as a fraction of slot height.
+ * Torso ≈ 28-30% of full body height, body fills 82% of slot
+ * → torso fills ≈ 0.24 of slot.
+ */
+const TORSO_FRAC = 0.24;
 
 /** Minimum visibility for a MediaPipe pose landmark to be trusted (0..1). */
 const POSE_MIN_VIS = 0.35;
@@ -50,6 +54,8 @@ const SIZE_STEP = 0.02;
 
 export function AthletePhotos() {
   const [importerOpen, setImporterOpen] = useState(false);
+  const sizeMode = useScorecard((s) => s.sizeMode ?? 'auto');
+  const setSizeMode = useScorecard((s) => s.setSizeMode);
 
   return (
     <section
@@ -67,17 +73,20 @@ export function AthletePhotos() {
         className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/60"
       />
 
-      <div className="relative z-10 flex items-center justify-between gap-2 border-b border-[var(--rule)] bg-black/70 px-3 py-2 backdrop-blur">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rule)] bg-black/70 px-3 py-2 backdrop-blur">
         <span className="font-display text-[0.65rem] uppercase tracking-[0.3em] text-[var(--fg-dim)]">
           Comparison Stage
         </span>
-        <button
-          type="button"
-          onClick={() => setImporterOpen(true)}
-          className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
-        >
-          Import from gallery URL
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SizeModeToggle value={sizeMode} onChange={setSizeMode} />
+          <button
+            type="button"
+            onClick={() => setImporterOpen(true)}
+            className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
+          >
+            Import from gallery URL
+          </button>
+        </div>
       </div>
 
       <PoseTabs />
@@ -423,6 +432,7 @@ function ScaledCutout({
   const sizeAdjust = useScorecard((s) =>
     side === 'A' ? s.athleteA.sizeAdjust ?? 1 : s.athleteB.sizeAdjust ?? 1,
   );
+  const sizeMode = useScorecard((s) => s.sizeMode ?? 'auto');
 
   useResizeObserver(containerRef, (entry) =>
     setSize({ w: entry.contentRect.width, h: entry.contentRect.height }),
@@ -432,8 +442,8 @@ function ScaledCutout({
   let imgWidth: number | undefined;
   let imgHeight: number | undefined;
   let positioned = false;
-  /** Which alignment strategy actually fired — surfaced as a small badge for debugging. */
-  let strategy: 'pose' | 'face' | 'body' | null = null;
+  /** Debug badge: AUTO·N (N metrics blended) or HEAD. */
+  let strategy: string | null = null;
   // Manual nudge applied on top of every strategy.
   const manualTx = size ? offsetX * size.w : 0;
   const manualTy = size ? offsetY * size.h : 0;
@@ -444,121 +454,104 @@ function ScaledCutout({
         ? (side === 'A' ? heightA : heightB) / Math.max(heightA, heightB)
         : 1;
 
-    // Detect "raw-photo" body bboxes (no bg removal happened — body bbox
-    // covers the full image). For those, body height = photo height which
-    // depends on crop, so we'd lose comparability. Switch to head-as-metric
-    // instead: scale by detected face size.
     const poseAnchor = pose ? extractPoseAnchor(pose) : null;
+    // Raw-photo body bbox (no bg removal — covers full image). Body height
+    // would equal the photo crop, so it's unreliable as a scale metric.
     const isRawPhotoBbox =
       !!body && body.x === 0 && body.y === 0 &&
       body.width === body.imgW && body.height === body.imgH;
 
-    // ──────────── Strategy 0: head-as-metric (raw photos with face) ────────────
-    if (isRawPhotoBbox && face) {
-      let scale = (size.h * FACE_AS_METRIC_FRAC) / face.height;
-      scale *= heightRatio;
-      scale *= sizeAdjust;
+    // Collect every scale candidate we can derive from the available
+    // metrics. Each candidate is "what scale would make THIS metric land
+    // on its expected fraction of the slot". Geometric mean across them
+    // robustifies against any single noisy/biased source.
+    const candidates: Array<{ name: string; scale: number }> = [];
 
-      imgWidth = face.imgW * scale;
-      imgHeight = face.imgH * scale;
+    // 1. Body bbox height — only when bg removal produced a real cutout.
+    if (body && !isRawPhotoBbox && body.height > 0) {
+      candidates.push({
+        name: 'body',
+        scale: (size.h * BODY_FILL_FRAC) / body.height,
+      });
+    }
 
-      // Ground line via ankle if pose found one, else face anchor.
+    // 2. Face height (head-as-metric) — crop-invariant.
+    if (face && face.height > 0) {
+      candidates.push({
+        name: 'face',
+        scale: (size.h * FACE_AS_METRIC_FRAC) / face.height,
+      });
+    }
+
+    // 3. Pose torso length (shoulder→hip) — invariant to limb crops.
+    if (poseAnchor && poseAnchor.torsoLength > 0) {
+      candidates.push({
+        name: 'torso',
+        scale: (size.h * TORSO_FRAC) / poseAnchor.torsoLength,
+      });
+    }
+
+    // 4. Pose head-to-ankle height — uses face bbox top as head crown.
+    if (poseAnchor && poseAnchor.ankleMidY != null && face) {
+      const poseBodyPx = poseAnchor.ankleMidY - face.y;
+      if (poseBodyPx > 0) {
+        candidates.push({
+          name: 'h2a',
+          scale: (size.h * BODY_FILL_FRAC) / poseBodyPx,
+        });
+      }
+    }
+
+    // Pick base scale: HEAD-only override, else geometric mean of all.
+    let baseScale: number | null = null;
+    if (sizeMode === 'head') {
+      const faceCandidate = candidates.find((c) => c.name === 'face');
+      baseScale = faceCandidate?.scale
+        ?? geometricMean(candidates.map((c) => c.scale)); // fallback if no face
+      strategy = 'HEAD';
+    } else if (candidates.length > 0) {
+      baseScale = geometricMean(candidates.map((c) => c.scale));
+      strategy = `AUTO·${candidates.length}`;
+    }
+
+    if (baseScale != null) {
+      const scale = baseScale * heightRatio * sizeAdjust;
+
+      // Use whichever source has imgW/imgH (all should match for a given photo).
+      const imgW = body?.imgW ?? face?.imgW ?? pose?.imgW ?? size.w;
+      const imgH = body?.imgH ?? face?.imgH ?? pose?.imgH ?? size.h;
+      imgWidth = imgW * scale;
+      imgHeight = imgH * scale;
+
+      // Vertical: ankle midpoint > body bbox bottom > face anchor.
       let ty: number;
       if (poseAnchor?.ankleMidY != null) {
         ty = size.h * GROUND_LINE - poseAnchor.ankleMidY * scale;
+      } else if (body && !isRawPhotoBbox) {
+        ty = size.h * GROUND_LINE - (body.y + body.height) * scale;
+      } else if (face) {
+        ty = size.h * HEAD_VERTICAL_POS - (face.y + face.height / 2) * scale;
       } else {
-        const faceCenterYScaled = (face.y + face.height / 2) * scale;
-        ty = size.h * HEAD_VERTICAL_POS - faceCenterYScaled;
+        ty = 0;
       }
 
-      const faceCenterXScaled = (face.x + face.width / 2) * scale;
+      // Horizontal: body bbox center > face center > image center.
+      let centerXImgPx: number;
+      if (body && !isRawPhotoBbox) {
+        centerXImgPx = body.x + body.width / 2;
+      } else if (face) {
+        centerXImgPx = face.x + face.width / 2;
+      } else {
+        centerXImgPx = imgW / 2;
+      }
       const targetX =
         side === 'A'
           ? size.w * (0.5 + BODY_INWARD_BIAS)
           : size.w * (0.5 - BODY_INWARD_BIAS);
-      const tx = targetX - faceCenterXScaled;
+      const tx = targetX - centerXImgPx * scale;
 
       transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
       positioned = true;
-      strategy = 'face';
-    }
-
-    // ──────────── Strategy 1: pose anchor + body-bbox scale (cutouts) ────────────
-    // Body bbox drives scale (consistent across photos shot at different
-    // zoom levels); ankle midpoint drives vertical alignment so both
-    // athletes' feet land on the same line; body bbox center drives
-    // horizontal so sideways lean doesn't shift the figure.
-    // Falls back to body bbox bottom for vertical when ankles aren't visible.
-    else if (poseAnchor && body) {
-      let scale = (size.h * BODY_FILL_FRAC) / body.height;
-      scale *= heightRatio;
-      scale *= sizeAdjust;
-
-      imgWidth = body.imgW * scale;
-      imgHeight = body.imgH * scale;
-
-      const groundYInImage =
-        poseAnchor.ankleMidY ?? body.y + body.height;
-      const ty = size.h * GROUND_LINE - groundYInImage * scale;
-
-      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
-      const targetX =
-        side === 'A'
-          ? size.w * (0.5 + BODY_INWARD_BIAS)
-          : size.w * (0.5 - BODY_INWARD_BIAS);
-      const tx = targetX - bodyCenterXScaled;
-
-      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
-      positioned = true;
-      strategy = 'pose';
-    }
-
-    // ──────────── Strategy 2: face anchor ────────────
-    else if (face && body) {
-      let scale = (size.h * BODY_FILL_FRAC) / body.height;
-      scale *= heightRatio;
-      scale *= sizeAdjust;
-
-      imgWidth = body.imgW * scale;
-      imgHeight = body.imgH * scale;
-
-      const faceCenterYScaled = (face.y + face.height / 2) * scale;
-      const ty = size.h * HEAD_VERTICAL_POS - faceCenterYScaled;
-
-      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
-      const targetX =
-        side === 'A'
-          ? size.w * (0.5 + BODY_INWARD_BIAS)
-          : size.w * (0.5 - BODY_INWARD_BIAS);
-      const tx = targetX - bodyCenterXScaled;
-
-      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
-      positioned = true;
-      strategy = 'face';
-    }
-
-    // ──────────── Strategy 3: body bbox + ground align ────────────
-    else if (body) {
-      let scale = (size.h * BODY_FILL_FRAC) / body.height;
-      scale *= heightRatio;
-      scale *= sizeAdjust;
-
-      imgWidth = body.imgW * scale;
-      imgHeight = body.imgH * scale;
-
-      const bodyBottomScaled = (body.y + body.height) * scale;
-      const ty = size.h * GROUND_LINE - bodyBottomScaled;
-
-      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
-      const targetX =
-        side === 'A'
-          ? size.w * (0.5 + BODY_INWARD_BIAS)
-          : size.w * (0.5 - BODY_INWARD_BIAS);
-      const tx = targetX - bodyCenterXScaled;
-
-      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
-      positioned = true;
-      strategy = 'body';
     }
   }
 
@@ -609,6 +602,68 @@ function ScaledCutout({
       )}
     </div>
   );
+}
+
+/**
+ * Two-state pill toggle for the stage-wide sizing strategy.
+ * AUTO blends every detected metric (body bbox, face, pose torso, pose
+ * head-to-ankle). HEAD forces face-as-metric for crop-invariant sizing
+ * when the auto blend pushes one athlete bigger than the other.
+ */
+function SizeModeToggle({
+  value,
+  onChange,
+}: {
+  value: SizeMode;
+  onChange: (mode: SizeMode) => void;
+}) {
+  const options: Array<{ id: SizeMode; label: string; hint: string }> = [
+    { id: 'auto', label: 'Auto', hint: 'Blend body + face + pose' },
+    { id: 'head', label: 'Head', hint: 'Force head-as-metric (crop-invariant)' },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Auto-sizing strategy"
+      className="inline-flex items-center border border-[var(--rule)] bg-black/40"
+    >
+      <span className="border-r border-[var(--rule)] px-2 py-1 font-display text-[0.55rem] uppercase tracking-[0.3em] text-[var(--fg-mute)]">
+        Auto-size
+      </span>
+      {options.map((o) => {
+        const active = o.id === value;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onChange(o.id)}
+            title={o.hint}
+            aria-pressed={active}
+            className={clsx(
+              'px-2.5 py-1 font-display text-[0.6rem] uppercase tracking-[0.25em] transition',
+              active
+                ? 'bg-[var(--accent)] text-[var(--strip-fg)]'
+                : 'text-[var(--fg-dim)] hover:text-[var(--fg)]',
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Geometric mean of positive numbers. Robust to a single outlier
+ * candidate dragging the result far from the cluster — exp(mean(log(x)))
+ * downweights extremes vs. arithmetic mean.
+ */
+function geometricMean(values: number[]): number {
+  if (values.length === 0) return 0;
+  let logSum = 0;
+  for (const v of values) logSum += Math.log(v);
+  return Math.exp(logSum / values.length);
 }
 
 /**

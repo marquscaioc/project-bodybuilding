@@ -81,10 +81,19 @@ export type Row = {
   margin: Margin | null;
 };
 
+/**
+ * Auto-sizing strategy for the comparison stage.
+ *  - 'auto' (default): pose + body bbox when bg-removal succeeded; head fallback when it didn't.
+ *  - 'head': always scale by detected face height (crop-invariant). Falls back to body bbox if no face was detected.
+ */
+export type SizeMode = 'auto' | 'head';
+
 export type Match = {
   athleteA: Athlete;
   athleteB: Athlete;
   rows: Row[];
   /** Which pose tab is currently displayed in the comparison stage. */
   currentPoseId: string;
+  /** How both athletes should be auto-sized. Defaults to 'auto'. */
+  sizeMode?: SizeMode;
 };
