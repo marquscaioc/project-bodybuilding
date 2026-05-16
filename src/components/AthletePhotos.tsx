@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { Athlete, BodyBox, FaceBox, Pose, PoseLandmark, Side } from '@/types';
+import type { Athlete, BodyBox, FaceBox, Pose, Side } from '@/types';
 import { useScorecard } from '@/lib/store';
 import { processPhoto, type ProgressStage } from '@/lib/processPhoto';
 import { POSE } from '@/lib/poseDetect';
@@ -30,15 +30,11 @@ const GROUND_LINE = 0.97;
 const HEAD_VERTICAL_POS = 0.13;
 /**
  * Head-as-metric scale: face height as a fraction of slot height.
- * Combined with the heightCm ratio multiplier on top.
+ * Used when the body bounding box covers the entire image (raw photo
+ * fallback) so sizing depends on actual head size rather than photo
+ * crop. Combined with the heightCm ratio multiplier on top.
  */
 const FACE_AS_METRIC_FRAC = 0.10;
-/**
- * Pose torso (shoulder→hip) target as a fraction of slot height.
- * Torso ≈ 28-30% of full body height, body fills 82% of slot
- * → torso fills ≈ 0.24 of slot.
- */
-const TORSO_FRAC = 0.24;
 
 /** Minimum visibility for a MediaPipe pose landmark to be trusted (0..1). */
 const POSE_MIN_VIS = 0.35;
@@ -428,16 +424,6 @@ function ScaledCutout({
     side === 'A' ? s.athleteA.sizeAdjust ?? 1 : s.athleteB.sizeAdjust ?? 1,
   );
 
-  // Pair-aware: read the OTHER athlete's photo at the same pose so we
-  // can pick a common ground reference (both use ankle Y, or both use
-  // body-bbox bottom). Without this, A could anchor on ankle while B
-  // anchors on bbox bottom — same GROUND_LINE target but different
-  // image-pixel anchors → feet land at different visual heights.
-  const otherPhoto = useScorecard((s) => {
-    const other = side === 'A' ? s.athleteB : s.athleteA;
-    return other.photos?.[s.currentPoseId];
-  });
-
   useResizeObserver(containerRef, (entry) =>
     setSize({ w: entry.contentRect.width, h: entry.contentRect.height }),
   );
@@ -446,8 +432,8 @@ function ScaledCutout({
   let imgWidth: number | undefined;
   let imgHeight: number | undefined;
   let positioned = false;
-  /** Debug badge: AUTO·N (N metrics blended) or HEAD. */
-  let strategy: string | null = null;
+  /** Which alignment strategy actually fired — surfaced as a small badge for debugging. */
+  let strategy: 'pose' | 'face' | 'body' | null = null;
   // Manual nudge applied on top of every strategy.
   const manualTx = size ? offsetX * size.w : 0;
   const manualTy = size ? offsetY * size.h : 0;
@@ -458,164 +444,121 @@ function ScaledCutout({
         ? (side === 'A' ? heightA : heightB) / Math.max(heightA, heightB)
         : 1;
 
+    // Detect "raw-photo" body bboxes (no bg removal happened — body bbox
+    // covers the full image). For those, body height = photo height which
+    // depends on crop, so we'd lose comparability. Switch to head-as-metric
+    // instead: scale by detected face size.
     const poseAnchor = pose ? extractPoseAnchor(pose) : null;
-    const poseBBox = pose ? extractPoseBBox(pose) : null;
-
-    // Raw-photo body bbox (no bg removal — covers full image). Body height
-    // would equal the photo crop, so it's unreliable as a scale metric.
     const isRawPhotoBbox =
       !!body && body.x === 0 && body.y === 0 &&
       body.width === body.imgW && body.height === body.imgH;
 
-    // Two classes of measurements:
-    //
-    // DIRECT: pixel-perfect estimates of the subject's full body height
-    // in the source image. These agree across athletes regardless of
-    // individual head/torso proportions, so they can be safely blended
-    // for denoising.
-    //   - body bbox height   (when bg removal gave a real cutout)
-    //   - pose head-to-ankle (face bbox top → ankle midpoint)
-    //   - pose visible bbox  (top of head landmark → bottom of foot landmark)
-    //
-    // PROPORTIONAL: scales derived by assuming a fixed body→part ratio
-    // (face ≈ 10% of body height, torso ≈ 24%). The assumption varies
-    // between people — using these as primary scale makes athletes with
-    // bigger/smaller heads render proportionally larger or smaller. So
-    // they only fire when no DIRECT estimate is available.
-    const directBodyHeights: Array<{ name: string; px: number }> = [];
+    // ──────────── Strategy 0: head-as-metric (raw photos with face) ────────────
+    if (isRawPhotoBbox && face) {
+      let scale = (size.h * FACE_AS_METRIC_FRAC) / face.height;
+      scale *= heightRatio;
+      scale *= sizeAdjust;
 
-    if (body && !isRawPhotoBbox && body.height > 0) {
-      directBodyHeights.push({ name: 'body', px: body.height });
-    }
-    if (poseAnchor && poseAnchor.ankleMidY != null && face) {
-      const headToAnkle = poseAnchor.ankleMidY - face.y;
-      if (headToAnkle > 0) {
-        directBodyHeights.push({ name: 'h2a', px: headToAnkle });
-      }
-    }
-    if (poseBBox) {
-      const poseHeight = poseBBox.bottomY - poseBBox.topY;
-      if (poseHeight > 0) {
-        directBodyHeights.push({ name: 'pbb', px: poseHeight });
-      }
-    }
+      imgWidth = face.imgW * scale;
+      imgHeight = face.imgH * scale;
 
-    let baseScale: number | null = null;
-
-    if (directBodyHeights.length > 0) {
-      // Outlier rejection (when 3+) → geometric mean of remaining
-      // direct body-height estimates → denoised body height, then
-      // scaled so the body fills BODY_FILL_FRAC of the slot.
-      const rawPx = directBodyHeights.map((d) => d.px);
-      const cleaned = rejectOutliers(rawPx);
-      const meanBodyHeightPx = geometricMean(cleaned);
-      baseScale = (size.h * BODY_FILL_FRAC) / meanBodyHeightPx;
-      const usedNames = directBodyHeights
-        .filter((d) => cleaned.includes(d.px))
-        .map((d) => d.name);
-      strategy = `AUTO·${usedNames.join('+')}`;
-    } else {
-      // No direct body-height measurement — fall back to proportional
-      // metrics. This branch hits when bg removal failed AND we don't
-      // have face+ankles to triangulate. We blend whatever's left so a
-      // raw-photo upload still gets reasonable sizing.
-      const proportional: number[] = [];
-      if (face && face.height > 0) {
-        proportional.push((size.h * FACE_AS_METRIC_FRAC) / face.height);
-      }
-      if (poseAnchor && poseAnchor.torsoLength > 0) {
-        proportional.push((size.h * TORSO_FRAC) / poseAnchor.torsoLength);
-      }
-      if (proportional.length > 0) {
-        baseScale = geometricMean(proportional);
-        strategy = `FALLBACK·${proportional.length}`;
-      }
-    }
-
-    if (baseScale != null) {
-      const scale = baseScale * heightRatio * sizeAdjust;
-
-      // Use whichever source has imgW/imgH (all should match for a given photo).
-      const imgW = body?.imgW ?? face?.imgW ?? pose?.imgW ?? size.w;
-      const imgH = body?.imgH ?? face?.imgH ?? pose?.imgH ?? size.h;
-      imgWidth = imgW * scale;
-      imgHeight = imgH * scale;
-
-      // ──────────── Pair-aware ground anchor ────────────
-      // The two athletes must use the SAME type of ground reference or
-      // their feet land at different heights. Probe what's available on
-      // both sides and pick the most reliable shared type.
-      const otherPose = otherPhoto?.pose
-        ? extractPoseAnchor(otherPhoto.pose)
-        : null;
-      const otherPoseBBox = otherPhoto?.pose
-        ? extractPoseBBox(otherPhoto.pose)
-        : null;
-      const otherIsRawBbox =
-        !!otherPhoto?.body &&
-        otherPhoto.body.x === 0 &&
-        otherPhoto.body.y === 0 &&
-        otherPhoto.body.width === otherPhoto.body.imgW &&
-        otherPhoto.body.height === otherPhoto.body.imgH;
-
-      const meHasAnkle = poseAnchor?.ankleMidY != null;
-      const otherHasAnkle = otherPose?.ankleMidY != null;
-      const meHasPoseBottom = poseBBox != null;
-      const otherHasPoseBottom = otherPoseBBox != null;
-      const meHasBodyBottom = !!body && !isRawPhotoBbox;
-      const otherHasBodyBottom = !!otherPhoto?.body && !otherIsRawBbox;
-
-      // Pick the highest-fidelity ground type that BOTH sides have.
-      // If the other side isn't uploaded yet, fall back to our best.
-      const otherPresent = !!otherPhoto;
-      let groundType: 'ankle' | 'pose-bbox' | 'body-bbox' | 'face' | 'none';
-      if (meHasAnkle && (!otherPresent || otherHasAnkle)) {
-        groundType = 'ankle';
-      } else if (meHasPoseBottom && (!otherPresent || otherHasPoseBottom)) {
-        groundType = 'pose-bbox';
-      } else if (meHasBodyBottom && (!otherPresent || otherHasBodyBottom)) {
-        groundType = 'body-bbox';
-      } else if (face) {
-        groundType = 'face';
-      } else {
-        groundType = 'none';
-      }
-
+      // Ground line via ankle if pose found one, else face anchor.
       let ty: number;
-      switch (groundType) {
-        case 'ankle':
-          ty = size.h * GROUND_LINE - poseAnchor!.ankleMidY! * scale;
-          break;
-        case 'pose-bbox':
-          ty = size.h * GROUND_LINE - poseBBox!.bottomY * scale;
-          break;
-        case 'body-bbox':
-          ty = size.h * GROUND_LINE - (body!.y + body!.height) * scale;
-          break;
-        case 'face':
-          ty = size.h * HEAD_VERTICAL_POS - (face!.y + face!.height / 2) * scale;
-          break;
-        default:
-          ty = 0;
+      if (poseAnchor?.ankleMidY != null) {
+        ty = size.h * GROUND_LINE - poseAnchor.ankleMidY * scale;
+      } else {
+        const faceCenterYScaled = (face.y + face.height / 2) * scale;
+        ty = size.h * HEAD_VERTICAL_POS - faceCenterYScaled;
       }
 
-      // Horizontal: body bbox center > face center > image center.
-      let centerXImgPx: number;
-      if (body && !isRawPhotoBbox) {
-        centerXImgPx = body.x + body.width / 2;
-      } else if (face) {
-        centerXImgPx = face.x + face.width / 2;
-      } else {
-        centerXImgPx = imgW / 2;
-      }
+      const faceCenterXScaled = (face.x + face.width / 2) * scale;
       const targetX =
         side === 'A'
           ? size.w * (0.5 + BODY_INWARD_BIAS)
           : size.w * (0.5 - BODY_INWARD_BIAS);
-      const tx = targetX - centerXImgPx * scale;
+      const tx = targetX - faceCenterXScaled;
 
       transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
       positioned = true;
+      strategy = 'face';
+    }
+
+    // ──────────── Strategy 1: pose anchor + body-bbox scale (cutouts) ────────────
+    // Body bbox drives scale (consistent across photos shot at different
+    // zoom levels); ankle midpoint drives vertical alignment so both
+    // athletes' feet land on the same line; body bbox center drives
+    // horizontal so sideways lean doesn't shift the figure.
+    // Falls back to body bbox bottom for vertical when ankles aren't visible.
+    else if (poseAnchor && body) {
+      let scale = (size.h * BODY_FILL_FRAC) / body.height;
+      scale *= heightRatio;
+      scale *= sizeAdjust;
+
+      imgWidth = body.imgW * scale;
+      imgHeight = body.imgH * scale;
+
+      const groundYInImage =
+        poseAnchor.ankleMidY ?? body.y + body.height;
+      const ty = size.h * GROUND_LINE - groundYInImage * scale;
+
+      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
+      const targetX =
+        side === 'A'
+          ? size.w * (0.5 + BODY_INWARD_BIAS)
+          : size.w * (0.5 - BODY_INWARD_BIAS);
+      const tx = targetX - bodyCenterXScaled;
+
+      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
+      positioned = true;
+      strategy = 'pose';
+    }
+
+    // ──────────── Strategy 2: face anchor ────────────
+    else if (face && body) {
+      let scale = (size.h * BODY_FILL_FRAC) / body.height;
+      scale *= heightRatio;
+      scale *= sizeAdjust;
+
+      imgWidth = body.imgW * scale;
+      imgHeight = body.imgH * scale;
+
+      const faceCenterYScaled = (face.y + face.height / 2) * scale;
+      const ty = size.h * HEAD_VERTICAL_POS - faceCenterYScaled;
+
+      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
+      const targetX =
+        side === 'A'
+          ? size.w * (0.5 + BODY_INWARD_BIAS)
+          : size.w * (0.5 - BODY_INWARD_BIAS);
+      const tx = targetX - bodyCenterXScaled;
+
+      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
+      positioned = true;
+      strategy = 'face';
+    }
+
+    // ──────────── Strategy 3: body bbox + ground align ────────────
+    else if (body) {
+      let scale = (size.h * BODY_FILL_FRAC) / body.height;
+      scale *= heightRatio;
+      scale *= sizeAdjust;
+
+      imgWidth = body.imgW * scale;
+      imgHeight = body.imgH * scale;
+
+      const bodyBottomScaled = (body.y + body.height) * scale;
+      const ty = size.h * GROUND_LINE - bodyBottomScaled;
+
+      const bodyCenterXScaled = (body.x + body.width / 2) * scale;
+      const targetX =
+        side === 'A'
+          ? size.w * (0.5 + BODY_INWARD_BIAS)
+          : size.w * (0.5 - BODY_INWARD_BIAS);
+      const tx = targetX - bodyCenterXScaled;
+
+      transform = `translate(${tx + manualTx}px, ${ty + manualTy}px)`;
+      positioned = true;
+      strategy = 'body';
     }
   }
 
@@ -666,67 +609,6 @@ function ScaledCutout({
       )}
     </div>
   );
-}
-
-/**
- * Geometric mean of positive numbers. Robust to a single outlier
- * candidate dragging the result far from the cluster — exp(mean(log(x)))
- * downweights extremes vs. arithmetic mean.
- */
-function geometricMean(values: number[]): number {
-  if (values.length === 0) return 0;
-  let logSum = 0;
-  for (const v of values) logSum += Math.log(v);
-  return Math.exp(logSum / values.length);
-}
-
-/**
- * Drop outliers from a list of estimates that should all measure the
- * same thing. If 3+ values are present, removes any value whose ratio
- * to the median falls outside [1 - OUTLIER_TOLERANCE, 1 + OUTLIER_TOLERANCE].
- * Always keeps at least 2 values so a real disagreement (e.g. one bad
- * landmark + one bad bbox) doesn't collapse to a single point.
- */
-const OUTLIER_TOLERANCE = 0.25;
-function rejectOutliers(values: number[]): number[] {
-  if (values.length < 3) return values;
-  const sorted = [...values].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const filtered = values.filter(
-    (v) => Math.abs(v - median) / median <= OUTLIER_TOLERANCE,
-  );
-  if (filtered.length >= 2) return filtered;
-  // Fallback: keep the 2 closest to median.
-  const withDist = values
-    .map((v) => ({ v, d: Math.abs(v - median) }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 2)
-    .map((x) => x.v);
-  return withDist;
-}
-
-/**
- * Bounding box derived from every visible pose landmark — head, hands,
- * feet, etc. Provides an additional direct body-height estimate (top of
- * head crown ≈ min(eyes, nose, ears) Y; bottom ≈ ankle/foot Y) that does
- * NOT depend on the bg-removal cutout or on the face detector.
- * Returns null if too few landmarks are visible to be trustworthy.
- */
-function extractPoseBBox(pose: Pose): { topY: number; bottomY: number } | null {
-  const visible = pose.landmarks.filter(
-    (l: PoseLandmark) => l && l.visibility >= POSE_MIN_VIS,
-  );
-  if (visible.length < 6) return null;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const l of visible) {
-    const y = l.y * pose.imgH;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return null;
-  if (maxY - minY < 24) return null;
-  return { topY: minY, bottomY: maxY };
 }
 
 /**
