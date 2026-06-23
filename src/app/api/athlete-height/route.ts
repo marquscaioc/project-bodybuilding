@@ -8,7 +8,7 @@ const BODYBUILDER_HEIGHT_FUDGE_CM = 2;
  * Without it they'll rate-limit or block (especially from cloud IPs).
  */
 const USER_AGENT =
-  'ChowsScorecard/1.0 (https://github.com/marquscaioc/project-bodybuilding; rafaelfratazzi@gmail.com)';
+  'ProjectBodybuilding/1.0 (https://github.com/marquscaioc/project-bodybuilding; rafaelfratazzi@gmail.com)';
 
 /**
  * Tiny in-memory cache so a typing flurry doesn't hammer Wikipedia.

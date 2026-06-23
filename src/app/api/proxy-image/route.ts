@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const upstream = await fetch(url, {
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (compatible; ChowsScorecard/1.0; bodybuilding scoring)',
+          'Mozilla/5.0 (compatible; ProjectBodybuilding/1.0; bodybuilding scoring)',
         Accept: 'image/*',
         Referer: new URL(url).origin,
       },

@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ images, pageTitle, resolvedFromViewer });
 }
 
-const UA = 'Mozilla/5.0 (compatible; ChowsScorecard/1.0; bodybuilding scoring)';
+const UA = 'Mozilla/5.0 (compatible; ProjectBodybuilding/1.0; bodybuilding scoring)';
 
 /**
  * Generic viewer-page link detection. Matches `<a href="…images.php?image=…">`,

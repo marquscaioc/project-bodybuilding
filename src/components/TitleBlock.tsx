@@ -1,8 +1,8 @@
 import Image from 'next/image';
 
 export function TitleBlock({
-  line1 = "Chow's",
-  line2 = 'Scorecard',
+  line1 = 'Project',
+  line2 = 'Bodybuilding',
   logoSrc,
   logoAlt,
 }: {
