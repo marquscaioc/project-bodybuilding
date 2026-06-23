@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useScorecard } from '@/lib/store';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
 import { fromSharedPhoto, toSharedPhoto, uploadCutout } from '@/lib/showPhotos';
+import { POSES } from '@/lib/constants';
 import type { ShowPhotosPoses } from '@/lib/types/db';
 import type { AthletePhoto, Side } from '@/types';
 
@@ -96,32 +97,31 @@ function JudgePhotosReader({ showCode }: { showCode: string }) {
   const setPhoto = useScorecard((s) => s.setPhoto);
   const clearPhoto = useScorecard((s) => s.clearPhoto);
 
-  // Which `${side}:${poseId}` we've applied, so we can clear ones the Host removes.
-  const appliedRef = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     const supabase = getSupabaseBrowser();
     let cancelled = false;
 
     function applyManifest(poses: ShowPhotosPoses) {
-      const next = new Set<string>();
+      const desired = new Set<string>();
       for (const [poseId, sides] of Object.entries(poses)) {
         (['A', 'B'] as Side[]).forEach((side) => {
           const shared = sides?.[side];
           if (!shared?.url) return;
-          next.add(`${side}:${poseId}`);
+          desired.add(`${side}:${poseId}`);
           // fromSharedPhoto already includes the Host's offsets, so setPhoto
           // alone restores image + framing.
           setPhoto(side, poseId, fromSharedPhoto(shared));
         });
       }
-      for (const key of appliedRef.current) {
-        if (!next.has(key)) {
-          const [side, poseId] = key.split(':') as [Side, string];
-          clearPhoto(side, poseId);
-        }
+      // The Host is the only photo source on a judge desk: drop anything else
+      // (stale local uploads from before this feature, or poses the Host
+      // cleared). clearPhoto is a no-op on an empty slot, so this stays cheap
+      // and loop-free.
+      for (const pose of POSES) {
+        (['A', 'B'] as Side[]).forEach((side) => {
+          if (!desired.has(`${side}:${pose.id}`)) clearPhoto(side, pose.id);
+        });
       }
-      appliedRef.current = next;
     }
 
     async function load() {
