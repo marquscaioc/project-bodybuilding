@@ -48,7 +48,7 @@ const SIZE_MIN = 0.5;
 const SIZE_MAX = 1.5;
 const SIZE_STEP = 0.02;
 
-export function AthletePhotos() {
+export function AthletePhotos({ readOnly = false }: { readOnly?: boolean } = {}) {
   const [importerOpen, setImporterOpen] = useState(false);
 
   return (
@@ -71,20 +71,22 @@ export function AthletePhotos() {
         <span className="font-display text-[0.65rem] uppercase tracking-[0.3em] text-[var(--fg-dim)]">
           Comparison Stage
         </span>
-        <button
-          type="button"
-          onClick={() => setImporterOpen(true)}
-          className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
-        >
-          Import from gallery URL
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setImporterOpen(true)}
+            className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
+          >
+            Import from gallery URL
+          </button>
+        )}
       </div>
 
       <PoseTabs />
 
       <div className="relative grid grid-cols-2 gap-px aspect-[16/10] sm:aspect-[16/9]">
-        <PhotoSlot side="A" />
-        <PhotoSlot side="B" />
+        <PhotoSlot side="A" readOnly={readOnly} />
+        <PhotoSlot side="B" readOnly={readOnly} />
 
         <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
           <span className="rounded border border-[var(--accent)]/60 bg-black/60 px-3 py-1 font-display text-sm uppercase tracking-[0.4em] text-[var(--accent)] backdrop-blur-sm sm:text-base">
@@ -95,7 +97,9 @@ export function AthletePhotos() {
 
       <NameStrip />
 
-      <ImporterDialog open={importerOpen} onClose={() => setImporterOpen(false)} />
+      {!readOnly && (
+        <ImporterDialog open={importerOpen} onClose={() => setImporterOpen(false)} />
+      )}
     </section>
   );
 }
@@ -166,7 +170,7 @@ function Dot({
   );
 }
 
-function PhotoSlot({ side }: { side: Side }) {
+function PhotoSlot({ side, readOnly = false }: { side: Side; readOnly?: boolean }) {
   const athlete = useScorecard((s) => (side === 'A' ? s.athleteA : s.athleteB));
   const currentPoseId = useScorecard((s) => s.currentPoseId);
   const setPhoto = useScorecard((s) => s.setPhoto);
@@ -196,7 +200,7 @@ function PhotoSlot({ side }: { side: Side }) {
   const DRAG_THRESHOLD_PX = 5;
 
   function handlePointerDown(e: React.PointerEvent) {
-    if (!photo || isLoading) return;
+    if (readOnly || !photo || isLoading) return;
     dragStateRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -283,18 +287,18 @@ function PhotoSlot({ side }: { side: Side }) {
     <div
       ref={slotRef}
       onClick={() => {
-        if (isLoading || hasImage) return;
+        if (readOnly || isLoading || hasImage) return;
         inputRef.current?.click();
       }}
       onDragOver={(e) => {
         e.preventDefault();
-        if (!isLoading) setFileDragging(true);
+        if (!readOnly && !isLoading) setFileDragging(true);
       }}
       onDragLeave={() => setFileDragging(false)}
       onDrop={(e) => {
         e.preventDefault();
         setFileDragging(false);
-        if (!isLoading) handleFile(e.dataTransfer.files?.[0]);
+        if (!readOnly && !isLoading) handleFile(e.dataTransfer.files?.[0]);
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -302,17 +306,23 @@ function PhotoSlot({ side }: { side: Side }) {
       onPointerCancel={handlePointerUp}
       className={clsx(
         'group relative h-full w-full overflow-hidden transition select-none',
-        hasImage
-          ? livePreview
-            ? 'cursor-grabbing'
-            : 'cursor-grab'
-          : 'cursor-pointer',
+        readOnly
+          ? ''
+          : hasImage
+            ? livePreview
+              ? 'cursor-grabbing'
+              : 'cursor-grab'
+            : 'cursor-pointer',
         fileDragging && 'ring-2 ring-[var(--accent)]',
       )}
-      role="button"
-      tabIndex={0}
+      role={readOnly ? undefined : 'button'}
+      tabIndex={readOnly ? undefined : 0}
       aria-label={
-        hasImage ? `Drag to reposition ${athlete.name}` : `Upload photo for ${athlete.name}`
+        readOnly
+          ? `Photo for ${athlete.name}`
+          : hasImage
+            ? `Drag to reposition ${athlete.name}`
+            : `Upload photo for ${athlete.name}`
       }
     >
       {hasImage ? (
@@ -326,12 +336,12 @@ function PhotoSlot({ side }: { side: Side }) {
           offsetY={liveOffsetY}
         />
       ) : (
-        <EmptyState side={side} />
+        <EmptyState side={side} readOnly={readOnly} />
       )}
 
       {isLoading && <LoadingOverlay stage={progress} />}
 
-      {hasImage && !isLoading && (
+      {hasImage && !isLoading && !readOnly && (
         <div className="pointer-events-none absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
           <button
             type="button"
@@ -366,7 +376,7 @@ function PhotoSlot({ side }: { side: Side }) {
         </div>
       )}
 
-      {hasImage && !isLoading && (
+      {hasImage && !isLoading && !readOnly && (
         <div className="pointer-events-none absolute bottom-2 left-2 font-display text-[0.55rem] uppercase tracking-[0.25em] text-white/40 opacity-0 transition group-hover:opacity-100">
           drag to nudge
         </div>
@@ -378,13 +388,15 @@ function PhotoSlot({ side }: { side: Side }) {
         </div>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
+      {!readOnly && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => handleFile(e.target.files?.[0])}
+        />
+      )}
     </div>
   );
 }
@@ -664,7 +676,7 @@ function extractPoseAnchor(pose: Pose): {
   };
 }
 
-function EmptyState({ side }: { side: Side }) {
+function EmptyState({ side, readOnly = false }: { side: Side; readOnly?: boolean }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 border border-dashed border-[var(--rule-strong)]/40 bg-black/40 p-6 text-center">
       <span
@@ -675,12 +687,20 @@ function EmptyState({ side }: { side: Side }) {
       >
         {side}
       </span>
-      <span className="font-display text-sm uppercase tracking-[0.3em] text-[var(--fg)]">
-        Drop photo or click
-      </span>
-      <span className="text-[0.6rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
-        Background removed automatically
-      </span>
+      {readOnly ? (
+        <span className="font-display text-sm uppercase tracking-[0.3em] text-[var(--fg-dim)]">
+          Aguardando foto do Host
+        </span>
+      ) : (
+        <>
+          <span className="font-display text-sm uppercase tracking-[0.3em] text-[var(--fg)]">
+            Drop photo or click
+          </span>
+          <span className="text-[0.6rem] uppercase tracking-[0.25em] text-[var(--fg-dim)]">
+            Background removed automatically
+          </span>
+        </>
+      )}
     </div>
   );
 }

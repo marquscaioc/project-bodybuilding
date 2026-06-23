@@ -7,7 +7,7 @@
  * Row types instead of `never`.
  */
 
-import type { Athlete, Row } from '@/types';
+import type { Athlete, BodyBox, FaceBox, Pose, Row } from '@/types';
 
 export type ProfileRow = {
   id: string;
@@ -48,6 +48,32 @@ export type JudgeCardRow = {
   updated_at: string;
 };
 
+/**
+ * One Host-curated pose photo in the shared manifest. `url` points at the
+ * public `show-photos` Storage bucket; the rest is positioning metadata carried
+ * verbatim from the Host's processPhoto result (see 0003_show_photos.sql).
+ */
+export type SharedPhoto = {
+  url: string;
+  face?: FaceBox;
+  body?: BodyBox;
+  pose?: Pose;
+  offsetX?: number;
+  offsetY?: number;
+};
+
+/** Manifest body: per pose id, the A and/or B shared photo. */
+export type ShowPhotosPoses = {
+  [poseId: string]: { A?: SharedPhoto; B?: SharedPhoto };
+};
+
+/** The single shared-photo row for a show, keyed by show code. */
+export type ShowPhotosRow = {
+  show_code: string;
+  poses: ShowPhotosPoses;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -67,6 +93,12 @@ export type Database = {
         Row: JudgeCardRow;
         Insert: Partial<JudgeCardRow> & { slug: string };
         Update: Partial<JudgeCardRow>;
+        Relationships: [];
+      };
+      show_photos: {
+        Row: ShowPhotosRow;
+        Insert: Partial<ShowPhotosRow> & { show_code: string };
+        Update: Partial<ShowPhotosRow>;
         Relationships: [];
       };
     };

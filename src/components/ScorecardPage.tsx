@@ -34,6 +34,11 @@ export type ScorecardPageProps = {
    * login, so it's hidden there; the solo playground keeps it on.
    */
   showThemeNav?: boolean;
+  /**
+   * Render the comparison-stage photos read-only. Judge desks mirror the
+   * Host's curated images; the Host desk and solo routes stay editable.
+   */
+  photosReadOnly?: boolean;
 };
 
 export function ScorecardPage(props: ScorecardPageProps) {
@@ -55,6 +60,7 @@ function ScorecardPageBody({
   brandLine2,
   logoSrc,
   showThemeNav = true,
+  photosReadOnly = false,
 }: Omit<ScorecardPageProps, 'judgeId'>) {
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +86,7 @@ function ScorecardPageBody({
           logoAlt={brand}
         />
 
-        <AthletePhotos />
+        <AthletePhotos readOnly={photosReadOnly} />
       </main>
     </div>
   );

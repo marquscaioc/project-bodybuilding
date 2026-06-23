@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useScorecard } from '@/lib/store';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
 import type { JudgeCardRow } from '@/lib/types/db';
-import type { Match } from '@/types';
+import type { Athlete, Match } from '@/types';
 
 const DEBOUNCE_MS = 500;
 
@@ -72,8 +72,8 @@ export function JudgeCardSync({
       const { error } = await supabase.from('judge_cards').upsert({
         slug,
         display_name: displayName,
-        athlete_a: athleteA,
-        athlete_b: athleteB,
+        athlete_a: stripPhotos(athleteA),
+        athlete_b: stripPhotos(athleteB),
         rows,
         current_pose_id: currentPoseId,
       });
@@ -85,6 +85,18 @@ export function JudgeCardSync({
   }, [athleteA, athleteB, rows, currentPoseId, slug, displayName]);
 
   return null;
+}
+
+/**
+ * Drop the heavy per-pose `photos` before syncing an athlete to judge_cards.
+ * Shared photos now travel through show_photos (Storage URLs); the scorecard
+ * row only needs names/height, keeping it small.
+ */
+function stripPhotos(athlete: Athlete): Athlete {
+  if (!athlete.photos) return athlete;
+  const rest = { ...athlete };
+  delete rest.photos;
+  return rest;
 }
 
 /** Apply DB row values to the in-memory store (rows/names/pose only). */

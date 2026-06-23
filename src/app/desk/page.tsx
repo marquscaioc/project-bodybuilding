@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ScorecardPage } from '@/components/ScorecardPage';
 import { JudgeCardSync } from '@/components/JudgeCardProvider';
+import { ShowPhotosSync } from '@/components/ShowPhotosSync';
 import { getBuiltinJudge } from '@/lib/builtinJudges';
-import { clearJudgeSession, getJudgeSession, HOST_SLUG } from '@/lib/show';
+import { clearJudgeSession, getJudgeSession, HOST_SLUG, SHOW_CODE } from '@/lib/show';
 
 /**
  * The signed-in judge's live desk: their themed scorecard, cloud-synced to
@@ -32,6 +33,8 @@ export default function DeskPage() {
   const judge = getBuiltinJudge(slug);
   if (!judge) return null;
 
+  const isHost = slug === HOST_SLUG;
+
   return (
     <>
       <ScorecardPage
@@ -42,12 +45,18 @@ export default function DeskPage() {
         brandLine2={judge.line2}
         logoSrc={judge.logoSrc}
         showThemeNav={false}
-        sync={<JudgeCardSync slug={slug} displayName={judge.name} />}
+        photosReadOnly={!isHost}
+        sync={
+          <>
+            <JudgeCardSync slug={slug} displayName={judge.name} />
+            <ShowPhotosSync showCode={SHOW_CODE} isHost={isHost} />
+          </>
+        }
       />
       <DeskControls
         themeClass={judge.themeClass}
         judgeName={judge.name}
-        isHost={slug === HOST_SLUG}
+        isHost={isHost}
         onSwitch={() => {
           clearJudgeSession();
           router.replace('/login');
