@@ -25,8 +25,6 @@ export type BuiltinJudge = {
   themeClass: string;
   /** Channel logo under /public/logos. Absent → text title block. */
   logoSrc?: string;
-  /** One-line broadcast caption shown under the name on the roster. */
-  tagline: string;
   /** Primary brand color — nav dot + roster avatar ring (theme --mosaic-1). */
   swatch: string;
   /** Bright accent for the roster caption text (theme --mosaic-3). */
@@ -43,7 +41,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'Bodybuilding',
     themeClass: 'theme-project-bodybuilding',
     logoSrc: '/logos/dih.jpg',
-    tagline: 'The network desk',
     swatch: '#ff2d8c',
     accent: '#ffc94e',
     deep: '#4a1a5b',
@@ -55,7 +52,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'man',
     themeClass: 'theme-supersetman',
     logoSrc: '/logos/supersetman.jpg',
-    tagline: 'Matchups & breakdowns',
     swatch: '#ee2b1c',
     accent: '#ffc83d',
     deep: '#5e0f08',
@@ -67,7 +63,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'zeronine',
     themeClass: 'theme-epzeronine',
     logoSrc: '/logos/epzeronine.jpg',
-    tagline: 'Pro show coverage',
     swatch: '#b6f000',
     accent: '#d6ff52',
     deep: '#1a2b05',
@@ -79,7 +74,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'Muscle',
     themeClass: 'theme-marxmaxmuscle',
     logoSrc: '/logos/marxmaxmuscle.jpg',
-    tagline: 'Every era, every icon',
     swatch: '#c01f1a',
     accent: '#f5d24a',
     deep: '#4a0a08',
@@ -91,7 +85,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'Scorecard',
     themeClass: 'theme-xavier',
     logoSrc: '/logos/xavier.jpg',
-    tagline: 'Cool & analytical',
     swatch: '#4dd0e1',
     accent: '#ffd166',
     deep: '#103655',
@@ -103,7 +96,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line2: 'Scorecard',
     themeClass: 'theme-marcus',
     logoSrc: '/logos/muscle.jpg',
-    tagline: 'Retro sunset',
     swatch: '#ff3d8b',
     accent: '#ffd166',
     deep: '#6b2a4a',
@@ -114,7 +106,6 @@ export const BUILTIN_JUDGES: BuiltinJudge[] = [
     line1: 'Superchat',
     line2: 'Scorecard',
     themeClass: 'theme-superchat',
-    tagline: 'Cyber dual-tone',
     swatch: '#00d2d2',
     accent: '#7be9ec',
     deep: '#1d6e7a',

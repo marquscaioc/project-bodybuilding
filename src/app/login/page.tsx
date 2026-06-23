@@ -154,7 +154,6 @@ function LoginInner() {
                 )}
                 <span className="bb-tile-name">
                   <span className="bb-tile-name-1">{j.name}</span>
-                  <span className="bb-tile-name-2">{j.tagline}</span>
                 </span>
               </button>
             );

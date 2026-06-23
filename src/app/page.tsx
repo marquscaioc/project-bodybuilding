@@ -24,12 +24,17 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    // Ohio is in the US Eastern zone; Intl handles the EST/EDT switch for us.
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'short',
+    });
     function tick() {
-      const d = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      setClock(
-        `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`,
-      );
+      setClock(fmt.format(new Date()));
     }
     tick();
     const id = setInterval(tick, 1000);
@@ -85,7 +90,7 @@ export default function HomePage() {
             </span>
             <span className="bb-clock" suppressHydrationWarning>
               <span className="bb-live-dot" style={{ width: 6, height: 6 }} />
-              {mounted ? clock : '--:--:-- UTC'}
+              {mounted ? clock : '--:--:-- ET'}
             </span>
           </div>
         </div>
@@ -272,7 +277,6 @@ export default function HomePage() {
                   )}
                   <span className="bb-tile-name">
                     <span className="bb-tile-name-1">{j.name}</span>
-                    <span className="bb-tile-name-2">{j.tagline}</span>
                   </span>
                 </Link>
               ))}
@@ -290,7 +294,7 @@ export default function HomePage() {
               </span>
             </div>
             <span className="bb-clock" suppressHydrationWarning>
-              {mounted ? clock : '--:--:-- UTC'}
+              {mounted ? clock : '--:--:-- ET'}
             </span>
           </div>
         </div>
