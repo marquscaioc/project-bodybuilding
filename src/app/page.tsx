@@ -2,8 +2,12 @@
 
 import { useEffect, useState, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { BUILTIN_JUDGES } from '@/lib/builtinJudges';
 
-const PANEL_FACES = ['/logos/dih.jpg', '/logos/xavier.jpg', '/logos/muscle.jpg'];
+// Hero face cluster — the four desks that carry a real channel logo.
+const HEADLINERS = BUILTIN_JUDGES.filter((j) => j.logoSrc).slice(0, 4);
+const ROSTER_COUNT = String(BUILTIN_JUDGES.length).padStart(2, '0');
 
 export default function HomePage() {
   const router = useRouter();
@@ -110,26 +114,41 @@ export default function HomePage() {
           </h1>
 
           <div className="mt-10 grid gap-8 sm:grid-cols-[1.4fr_1fr] sm:items-end">
-            <p className="bb-reveal d4 max-w-2xl text-[0.95rem] leading-relaxed text-[#e9c4dc] sm:text-base">
-              Pairwise margin scoring for one-versus-one bodybuilding match-ups.
-              One scorecard, one mission &mdash; enter the access code to step
-              onto the floor.
-            </p>
+            <div className="bb-reveal d4 flex flex-col gap-5">
+              <p className="max-w-2xl text-[0.95rem] leading-relaxed text-[#e9c4dc] sm:text-base">
+                Pairwise margin scoring for one-versus-one bodybuilding
+                match-ups. One locked formula, every judge on the same twelve
+                rows &mdash; take your desk and score the show live, or open a
+                solo card below.
+              </p>
+              <Link
+                href="/login"
+                className="inline-flex w-fit items-center gap-2 border border-[#ff2d8c] px-5 py-3 font-display text-sm uppercase tracking-[0.22em] text-[#ff2d8c] transition hover:bg-[#ff2d8c] hover:text-[#150318]"
+              >
+                <span className="bb-live-dot" style={{ width: 7, height: 7 }} />
+                Enter the live show <span className="text-lg">→</span>
+              </Link>
+            </div>
 
-            <div className="bb-reveal d5 flex flex-col gap-3 sm:items-end">
+            {/* Face cluster doubles as a jump-link to the full panel below. */}
+            <a
+              href="#panel"
+              className="bb-reveal d5 group flex flex-col gap-3 sm:items-end"
+            >
               <div className="bb-panel-row">
-                {PANEL_FACES.map((src) => (
+                {HEADLINERS.map((j) => (
                   <span
-                    key={src}
+                    key={j.slug}
                     className="bb-panel-face"
-                    style={{ backgroundImage: `url(${src})` }}
+                    style={{ backgroundImage: `url(${j.logoSrc})` }}
                   />
                 ))}
               </div>
-              <span className="font-mono text-[0.58rem] uppercase tracking-[0.28em] text-[#d8a8e8]">
-                Panel of judges &middot; standing by
+              <span className="font-mono text-[0.58rem] uppercase tracking-[0.28em] text-[#d8a8e8] transition group-hover:text-[#ffe3f3]">
+                {BUILTIN_JUDGES.length} judges on the panel &middot; meet the
+                desk&nbsp;&darr;
               </span>
-            </div>
+            </a>
           </div>
 
           {/* ═══════════ GATE — single feature card with password ═══════════ */}
@@ -144,7 +163,7 @@ export default function HomePage() {
                   Access / Secured
                 </span>
                 <span className="font-mono text-[0.55rem] uppercase tracking-[0.25em] text-[var(--fg-mute)]">
-                  Gate&nbsp;01
+                  Segment&nbsp;01
                 </span>
               </div>
 
@@ -212,6 +231,53 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
+          {/* ═══════════ THE JUDGING PANEL — the roster of desks ═══════════ */}
+          <section id="panel" className="bb-reveal d5 mt-16 scroll-mt-6">
+            <div className="bb-section-head">
+              <span className="bb-section-idx">{ROSTER_COUNT}</span>
+              <h2 className="bb-section-title">The Judging Panel</h2>
+              <span className="bb-section-sub">
+                Tap your desk to take a seat at the live show.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {BUILTIN_JUDGES.map((j, i) => (
+                <Link
+                  key={j.slug}
+                  href={`/login?desk=${j.slug}`}
+                  className="bb-tile"
+                  style={
+                    {
+                      '--mosaic-1': j.swatch,
+                      '--mosaic-3': j.accent,
+                      '--mosaic-5': j.deep,
+                    } as React.CSSProperties
+                  }
+                >
+                  <span className="bb-tile-tag">
+                    CH&nbsp;{String(i + 1).padStart(2, '0')}
+                  </span>
+                  {j.logoSrc ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={j.logoSrc} alt="" className="bb-tile-avatar" />
+                  ) : (
+                    <span
+                      className="bb-tile-avatar flex items-center justify-center font-display text-lg text-[#0a0a0a]"
+                      style={{ background: j.swatch }}
+                    >
+                      {j.name.charAt(0)}
+                    </span>
+                  )}
+                  <span className="bb-tile-name">
+                    <span className="bb-tile-name-1">{j.name}</span>
+                    <span className="bb-tile-name-2">{j.tagline}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* Footer credits */}

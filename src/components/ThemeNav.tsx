@@ -8,15 +8,15 @@ import {
   CUSTOM_JUDGES_EVENT,
   loadCustomJudges,
 } from '@/lib/customJudges';
+import { BUILTIN_JUDGES } from '@/lib/builtinJudges';
 import type { CustomJudgeConfig } from '@/types/customJudge';
 import { JudgeEditor } from './JudgeEditor';
 
-const BUILTIN = [
-  { href: '/project-bodybuilding', label: 'Project Bodybuilding', swatch: '#ff2d8c' },
-  { href: '/xavier', label: 'Xavier', swatch: '#4dd0e1' },
-  { href: '/marcus', label: 'Marcus', swatch: '#ff3d8b' },
-  { href: '/superchat', label: 'Superchat', swatch: '#ff1c50' },
-] as const;
+const BUILTIN = BUILTIN_JUDGES.map((j) => ({
+  href: `/${j.slug}`,
+  label: j.name,
+  swatch: j.swatch,
+}));
 
 export function ThemeNav() {
   const pathname = usePathname();

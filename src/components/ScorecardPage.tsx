@@ -23,6 +23,17 @@ export type ScorecardPageProps = {
   brandLine1: string;
   brandLine2: string;
   logoSrc?: string;
+  /**
+   * Optional node rendered *inside* this judge's store provider — use it for a
+   * cloud-sync bridge (e.g. <JudgeCardSync/>) that must share the same store
+   * the scorecard UI writes to.
+   */
+  sync?: React.ReactNode;
+  /**
+   * Show the judge/theme switcher. On a live desk the identity is fixed by
+   * login, so it's hidden there; the solo playground keeps it on.
+   */
+  showThemeNav?: boolean;
 };
 
 export function ScorecardPage(props: ScorecardPageProps) {
@@ -30,6 +41,7 @@ export function ScorecardPage(props: ScorecardPageProps) {
   // useScorecard call descends through this judge's isolated store.
   return (
     <ScorecardStoreProvider judgeId={props.judgeId}>
+      {props.sync}
       <ScorecardPageBody {...props} />
     </ScorecardStoreProvider>
   );
@@ -42,6 +54,7 @@ function ScorecardPageBody({
   brandLine1,
   brandLine2,
   logoSrc,
+  showThemeNav = true,
 }: Omit<ScorecardPageProps, 'judgeId'>) {
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +65,7 @@ function ScorecardPageBody({
           <span className="text-[0.7rem] uppercase tracking-[0.35em] text-[var(--fg-dim)]">
             {brand} · Live
           </span>
-          <ThemeNav />
+          {showThemeNav && <ThemeNav />}
           <div className="flex items-center gap-2">
             <ResetButton />
             <ExportButton targetRef={cardRef} />

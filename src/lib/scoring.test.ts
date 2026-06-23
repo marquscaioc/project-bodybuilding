@@ -1,7 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import type { Row } from '@/types';
+import type { Margin, Row, Side } from '@/types';
 import { buildInitialRows } from './constants';
-import { displayScores, rowPoints, totalPoints, verdict } from './scoring';
+import {
+  consensus,
+  displayScores,
+  rowPoints,
+  totalPoints,
+  verdict,
+} from './scoring';
+
+/** Every row swept to one side at a fixed margin (clean, float-safe scores). */
+function sweep(side: Side, margin: Margin): Row[] {
+  const rows = buildInitialRows();
+  rows.forEach((r) => {
+    r.winner = side;
+    r.margin = margin;
+  });
+  return rows;
+}
 
 function applyKaiVsSamson(): Row[] {
   const rows = buildInitialRows();
@@ -111,5 +127,50 @@ describe('category ties', () => {
     });
     expect(totalPoints(rows)).toEqual({ a: 4, b: 4 });
     expect(displayScores(rows)).toEqual({ a: 50, b: 50 });
+  });
+});
+
+describe('consensus — host average across desks', () => {
+  it('averages the 0–100 call across scored desks', () => {
+    // A-sweep@4 → 100/0 ; A-sweep@2 → 75/25. Mean A = 87.5.
+    const result = consensus([
+      { slug: 'one', rows: sweep('A', 4) },
+      { slug: 'two', rows: sweep('A', 2) },
+    ]);
+    expect(result.scoredCount).toBe(2);
+    expect(result.consensusA).toBe(87.5);
+    expect(result.consensusB).toBe(12.5);
+    expect(result.verdict).toEqual({ kind: 'winner', side: 'A', margin: 75 });
+  });
+
+  it('excludes desks that have not scored yet', () => {
+    const result = consensus([
+      { slug: 'scored', rows: sweep('A', 4) }, // 100/0
+      { slug: 'blank', rows: buildInitialRows() }, // no winners picked
+    ]);
+    expect(result.scoredCount).toBe(1);
+    expect(result.consensusA).toBe(100);
+    expect(result.perJudge.find((j) => j.slug === 'blank')?.scored).toBe(false);
+  });
+
+  it('two opposite sweeps average to a 50/50 dead heat', () => {
+    const result = consensus([
+      { slug: 'a', rows: sweep('A', 4) }, // 100/0
+      { slug: 'b', rows: sweep('B', 4) }, // 0/100
+    ]);
+    expect(result.scoredCount).toBe(2);
+    expect(result.consensusA).toBe(50);
+    expect(result.verdict).toEqual({ kind: 'tie' });
+  });
+
+  it('falls back to 50/50 when no desk has scored', () => {
+    const result = consensus([
+      { slug: 'a', rows: buildInitialRows() },
+      { slug: 'b', rows: buildInitialRows() },
+    ]);
+    expect(result.scoredCount).toBe(0);
+    expect(result.consensusA).toBe(50);
+    expect(result.consensusB).toBe(50);
+    expect(result.verdict).toEqual({ kind: 'tie' });
   });
 });

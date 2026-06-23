@@ -162,6 +162,91 @@ body {
   --side-b: var(--mosaic-2);
 }
 
+/* 05 · Supersetman — fire red + golden-amber emblem + charcoal
+   (palette sampled from the flexing-bicep channel logo: red field,
+   gold disc, dark arm). Gold-tinted rules echo the emblem ring. */
+.theme-supersetman {
+  --bg: #1c0604;
+  --bg-glow: #7c160d;
+  --bg-elev: #2a0a06;
+  --fg: #ffece0;
+  --fg-dim: #d6a892;
+  --fg-mute: #7e4d3e;
+  --rule: rgba(232, 146, 0, 0.26);
+  --rule-strong: rgba(232, 146, 0, 0.5);
+  --rule-soft: rgba(232, 146, 0, 0.1);
+
+  --mosaic-1: #ee2b1c;   /* fire red — poses strip */
+  --mosaic-2: #e89200;   /* amber gold — categories strip */
+  --mosaic-3: #ffc83d;   /* bright gold — underline / final border */
+  --mosaic-4: #ff7d52;   /* warm coral companion */
+  --mosaic-5: #5e0f08;   /* deep maroon gradient */
+
+  --strip-bg: var(--mosaic-1);
+  --strip-fg: var(--bg);
+  --accent: var(--mosaic-2);   /* gold reads cleanly on the red-black bg */
+  --accent-soft: rgba(232, 146, 0, 0.2);
+  --side-a: var(--mosaic-1);
+  --side-b: var(--mosaic-2);
+}
+
+/* 06 · EPzeronine — neon lime esports mascot on near-black.
+   The lime is luminous, so it lives on accents / outlines (like the
+   logo's glowing linework); solid strip fills use deeper greens so the
+   white strip text stays legible. */
+.theme-epzeronine {
+  --bg: #080d02;
+  --bg-glow: #2e4a08;
+  --bg-elev: #111a05;
+  --fg: #f1ffd6;
+  --fg-dim: #a8c66f;
+  --fg-mute: #5a6e3a;
+  --rule: rgba(182, 240, 0, 0.24);
+  --rule-strong: rgba(182, 240, 0, 0.5);
+  --rule-soft: rgba(182, 240, 0, 0.09);
+
+  --mosaic-1: #5f8f00;   /* deep grass — poses strip fill */
+  --mosaic-2: #3c6300;   /* dark olive — categories strip fill */
+  --mosaic-3: #b6f000;   /* neon lime — the signature glow (accents/outlines) */
+  --mosaic-4: #d6ff52;   /* bright chartreuse companion */
+  --mosaic-5: #1a2b05;   /* deep forest gradient */
+
+  --strip-bg: var(--mosaic-1);
+  --strip-fg: var(--bg);
+  --accent: var(--mosaic-3);   /* neon lime — links, focus, buttons */
+  --accent-soft: rgba(182, 240, 0, 0.18);
+  --side-a: var(--mosaic-3);
+  --side-b: var(--mosaic-4);
+}
+
+/* 07 · Marx Max Muscle — deep crimson sunburst + black, with the
+   luchador-mask gold and gem-green as accents (sampled from the
+   wrestling-emblem channel logo). */
+.theme-marxmaxmuscle {
+  --bg: #0b0303;
+  --bg-glow: #6e1411;
+  --bg-elev: #190606;
+  --fg: #fbe9e2;
+  --fg-dim: #c79a8e;
+  --fg-mute: #79473d;
+  --rule: rgba(192, 31, 26, 0.3);
+  --rule-strong: rgba(192, 31, 26, 0.55);
+  --rule-soft: rgba(192, 31, 26, 0.1);
+
+  --mosaic-1: #c01f1a;   /* crimson — poses strip */
+  --mosaic-2: #e8b423;   /* mask gold — categories strip */
+  --mosaic-3: #f5d24a;   /* bright gold — underline / final border */
+  --mosaic-4: #3aa84f;   /* emerald gem accent */
+  --mosaic-5: #4a0a08;   /* deep blood maroon gradient */
+
+  --strip-bg: var(--mosaic-1);
+  --strip-fg: var(--bg);
+  --accent: var(--mosaic-2);   /* mask gold accent */
+  --accent-soft: rgba(232, 180, 35, 0.2);
+  --side-a: var(--mosaic-1);
+  --side-b: var(--mosaic-2);
+}
+
 /* ─────────── Mosaic surface treatment — fires for any theme that sets --mosaic-*.
    Default `/` page has no mosaic vars defined, so the var() fallbacks
    keep the original look. ─────────── */
@@ -699,4 +784,28 @@ body {
   filter: blur(18px);
   z-index: -1;
   pointer-events: none;
+}
+
+/* Respect reduced-motion: kill the broadcast entrance, marquee, pulse, and
+   sweep so the page settles instantly for anyone who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .bb-reveal {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .bb-live-dot {
+    animation: none;
+  }
+  .bb-marquee-track {
+    animation: none;
+  }
+  .bb-feature,
+  .bb-feature::before,
+  .bb-tile {
+    transition: none;
+  }
+  .bb-feature:hover::before {
+    left: -100%;
+  }
 }

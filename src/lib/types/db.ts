@@ -37,6 +37,17 @@ export type ScorecardRow = {
   updated_at: string;
 };
 
+/** One live judge desk, keyed by built-in judge slug (see 0002_judge_cards.sql). */
+export type JudgeCardRow = {
+  slug: string;
+  display_name: string;
+  athlete_a: Athlete;
+  athlete_b: Athlete;
+  rows: Row[];
+  current_pose_id: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -50,6 +61,12 @@ export type Database = {
         Row: ScorecardRow;
         Insert: Partial<ScorecardRow> & { user_id: string };
         Update: Partial<ScorecardRow>;
+        Relationships: [];
+      };
+      judge_cards: {
+        Row: JudgeCardRow;
+        Insert: Partial<JudgeCardRow> & { slug: string };
+        Update: Partial<JudgeCardRow>;
         Relationships: [];
       };
     };

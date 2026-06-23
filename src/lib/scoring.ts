@@ -55,3 +55,64 @@ export function verdict(rows: Row[]): Verdict {
     ? { kind: 'winner', side: 'A', margin: round1(a - b) }
     : { kind: 'winner', side: 'B', margin: round1(b - a) };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Host consensus — average each judge's 0–100 call across the panel.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One desk's contribution: raw points + the 0–100 display, plus whether it
+ *  has been scored at all (so unscored desks are left out of the average). */
+export type JudgeScore = {
+  slug: string;
+  scored: boolean;
+  pointsA: number;
+  pointsB: number;
+  displayA: number;
+  displayB: number;
+};
+
+export type Consensus = {
+  perJudge: JudgeScore[];
+  scoredCount: number;
+  /** Mean of displayA over scored desks; B = 100 − A. 50/50 when none scored. */
+  consensusA: number;
+  consensusB: number;
+  verdict: Verdict;
+};
+
+/** A desk counts as "scored" once any row has a winner picked. */
+export function judgeScore(slug: string, rows: Row[]): JudgeScore {
+  const scored = rows.some((r) => r.winner !== null);
+  const pts = totalPoints(rows);
+  const disp = displayScores(rows);
+  return {
+    slug,
+    scored,
+    pointsA: pts.a,
+    pointsB: pts.b,
+    displayA: disp.a,
+    displayB: disp.b,
+  };
+}
+
+/** Average each scored desk's Athlete-A call; the consensus still sums to 100. */
+export function consensus(cards: Array<{ slug: string; rows: Row[] }>): Consensus {
+  const perJudge = cards.map((c) => judgeScore(c.slug, c.rows));
+  const scoredJudges = perJudge.filter((j) => j.scored);
+  const scoredCount = scoredJudges.length;
+
+  const consensusA =
+    scoredCount === 0
+      ? 50
+      : round1(scoredJudges.reduce((acc, j) => acc + j.displayA, 0) / scoredCount);
+  const consensusB = round1(100 - consensusA);
+
+  const v: Verdict =
+    consensusA === consensusB
+      ? { kind: 'tie' }
+      : consensusA > consensusB
+        ? { kind: 'winner', side: 'A', margin: round1(consensusA - consensusB) }
+        : { kind: 'winner', side: 'B', margin: round1(consensusB - consensusA) };
+
+  return { perJudge, scoredCount, consensusA, consensusB, verdict: v };
+}
