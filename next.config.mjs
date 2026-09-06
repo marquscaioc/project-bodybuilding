@@ -2,10 +2,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const isVercelBuild = Boolean(process.env.VERCEL);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // Vercel supplies its own build adapter; standalone remains enabled for Docker/self-hosting.
+  output: isVercelBuild ? undefined : 'standalone',
   poweredByHeader: false,
   compress: true,
   turbopack: {
