@@ -82,7 +82,7 @@ body {
 .cornball-button {
   position: fixed;
   right: max(1.25rem, env(safe-area-inset-right));
-  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  bottom: calc(max(1.25rem, env(safe-area-inset-bottom)) + 5vh);
   z-index: 80;
   width: clamp(6.5rem, 10vw, 8.5rem);
   aspect-ratio: 1;
@@ -134,7 +134,7 @@ body {
 @media (max-width: 640px) {
   .cornball-button {
     right: max(0.85rem, env(safe-area-inset-right));
-    bottom: max(0.85rem, env(safe-area-inset-bottom));
+    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 5vh);
     width: 6rem;
   }
 }
@@ -1209,6 +1209,13 @@ body {
   .scorecard-section-heading span:last-child {
     display: none;
   }
+}
+
+/* Every written element inside a scorecard shares the same Geist 720 voice. */
+.scorecard-shell,
+.scorecard-shell :where(*) {
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif !important;
+  font-weight: 720 !important;
 }
 
 /* Respect reduced-motion for the live status and interactive tiles. */
