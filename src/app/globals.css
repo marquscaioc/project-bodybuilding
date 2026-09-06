@@ -26,7 +26,7 @@
   --side-b: #f87171;
   --home-pink: #ff2f92;
   --home-yellow: #ffe45e;
-  --home-neon-red: #ff2418;
+  --home-neon-red: #ff453a;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -224,9 +224,8 @@ body {
   line-height: 0.82;
   letter-spacing: -0.085em;
   text-shadow:
-    0 0 0.08em rgba(255, 36, 24, 0.95),
-    0 0 0.28em rgba(255, 20, 12, 0.7),
-    0 0 0.7em rgba(225, 6, 0, 0.42);
+    0 0.04em 0.12em rgba(0, 0, 0, 0.75),
+    0 0 0.22em rgba(255, 36, 24, 0.18);
   text-wrap: balance;
 }
 
