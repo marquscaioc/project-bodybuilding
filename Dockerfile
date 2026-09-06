@@ -1,50 +1,37 @@
-# ─────────────────────────────────────────────────────────────────────
-# Multi-stage build for the Next.js scorecard app.
-# Stage 1 installs deps + builds; stage 2 ships only what's needed to
-# run `next start`.
-# ─────────────────────────────────────────────────────────────────────
-
-# ─── 1. Builder ───
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS deps
 WORKDIR /app
-
-# Native modules from onnxruntime-node need libc6-compat on Alpine.
 RUN apk add --no-cache libc6-compat
-
-# Install deps first for better caching (separate from source copy).
 COPY package.json package-lock.json* ./
-RUN npm install --include=optional --no-audit --no-fund
+RUN npm ci --include=optional --no-audit --no-fund
 
-# Copy source. .dockerignore keeps node_modules/.next/.env*.local out.
+FROM node:24-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NEXT_PUBLIC_* vars need to be present at build time (baked into the
-# client bundle). Railway injects them via build env when configured.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 
-# ─── 2. Runtime ───
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
+RUN apk add --no-cache libc6-compat \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
+
 ENV NODE_ENV=production
-
-RUN apk add --no-cache libc6-compat
-
-# Copy only what `next start` needs: deps, build output, public assets,
-# config, and the package manifests for the start script.
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json* ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.mjs ./
-
-# Railway sets $PORT at runtime; default to 3000 for local docker run.
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
-EXPOSE 3000
+ENV HOSTNAME=0.0.0.0
 
-CMD ["sh", "-c", "npx next start -p ${PORT:-3000}"]
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

@@ -21,17 +21,18 @@ export function useHeightLookup(
   const [state, setState] = useState<HeightLookupState>({ status: 'idle' });
   const lastQueriedRef = useRef<string>('');
   const onFoundRef = useRef(onFound);
-  onFoundRef.current = onFound;
+
+  useEffect(() => {
+    onFoundRef.current = onFound;
+  }, [onFound]);
 
   useEffect(() => {
     const trimmed = name.trim();
     if (!enabled || trimmed.length < 3) {
-      console.info('[height-lookup] skipping', { name, enabled, len: trimmed.length });
       setState({ status: 'idle' });
       return;
     }
     if (trimmed === lastQueriedRef.current) {
-      console.info('[height-lookup] already queried', trimmed);
       return;
     }
 
@@ -39,7 +40,6 @@ export function useHeightLookup(
     const timer = setTimeout(async () => {
       lastQueriedRef.current = trimmed;
       setState({ status: 'loading' });
-      console.info('[height-lookup] querying', trimmed);
       try {
         const res = await fetch(
           `/api/athlete-height?name=${encodeURIComponent(trimmed)}`,
@@ -50,7 +50,6 @@ export function useHeightLookup(
           heightCm: number | null;
           page?: string;
         };
-        console.info('[height-lookup] result', trimmed, data);
         if (data.heightCm) {
           setState({ status: 'found', heightCm: data.heightCm, page: data.page });
           onFoundRef.current(data.heightCm);

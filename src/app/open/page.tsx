@@ -1,6 +1,6 @@
 import { ScorecardPage } from '@/components/ScorecardPage';
 
-export const metadata = { title: 'Open Scorecard · Project Bodybuilding' };
+export const metadata = { title: 'Open Scorecard · Project: Bodybuilding' };
 
 /**
  * Public, passwordless scorecard. Anyone with the link can use it.

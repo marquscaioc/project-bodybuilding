@@ -10,7 +10,7 @@ import { loadImage } from './loadImage';
 let landmarkerPromise: Promise<import('@mediapipe/tasks-vision').PoseLandmarker> | null =
   null;
 
-const VISION_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
+const VISION_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 

@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { readResponseText, safeRemoteFetch } from '@/lib/safeRemoteFetch';
+
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
 
 /**
  * POST /api/scrape-gallery
@@ -33,17 +36,23 @@ export async function POST(req: Request) {
   let html: string;
   let pageTitle: string | undefined;
   try {
-    const res = await fetch(url, {
+    const res = await safeRemoteFetch(url, {
       headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
-    });
+    }, { timeoutMs: 10_000 });
     if (!res.ok) {
       return NextResponse.json(
         { error: `Source returned HTTP ${res.status}`, images: [] },
         { status: 502 },
       );
     }
-    html = await res.text();
+    const contentType = res.headers.get('content-type')?.toLowerCase() ?? '';
+    if (contentType && !contentType.includes('text/html')) {
+      return NextResponse.json(
+        { error: 'Source did not return HTML', images: [] },
+        { status: 415 },
+      );
+    }
+    html = await readResponseText(res, MAX_HTML_BYTES);
     pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
   } catch (err) {
     return NextResponse.json(
@@ -101,16 +110,11 @@ function collectViewerLinks(html: string, baseUrl: string): string[] {
  */
 async function resolveViewerPage(viewerUrl: string): Promise<string | null> {
   try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(viewerUrl, {
+    const res = await safeRemoteFetch(viewerUrl, {
       headers: { 'User-Agent': UA, Accept: 'text/html' },
-      signal: ctrl.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(timeout);
+    }, { timeoutMs: 8_000 });
     if (!res.ok) return null;
-    const html = await res.text();
+    const html = await readResponseText(res, MAX_HTML_BYTES);
 
     // Prefer NPC News canonical pattern: /images/contests/N/large/M.jpg
     const large = html.match(

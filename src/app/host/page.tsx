@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getSupabaseBrowser } from '@/lib/supabase/client';
 import { BUILTIN_JUDGES } from '@/lib/builtinJudges';
-import { getJudgeSession, HOST_SLUG } from '@/lib/show';
+import { HOST_SLUG } from '@/lib/show';
 import { consensus, type JudgeScore } from '@/lib/scoring';
 import type { JudgeCardRow } from '@/lib/types/db';
 import type { Row } from '@/types';
@@ -26,39 +26,46 @@ export default function HostPage() {
 
   // Gate: host desk only.
   useEffect(() => {
-    const s = getJudgeSession();
-    if (s !== HOST_SLUG) {
-      router.replace('/login?next=/host');
-      return;
-    }
-    setAuthed(true);
+    let cancelled = false;
+    fetch('/api/show-session', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ principal: string }>;
+      })
+      .then((session) => {
+        if (cancelled) return;
+        if (session?.principal !== HOST_SLUG) {
+          router.replace('/?access=host');
+          return;
+        }
+        setAuthed(true);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace('/?access=host');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  // Load + subscribe to every desk in realtime.
+  // Poll the authenticated host endpoint. Judge rows are no longer readable
+  // from the public Supabase client.
   useEffect(() => {
     if (!authed) return;
-    const sb = getSupabaseBrowser();
     let cancelled = false;
 
     async function load() {
-      const { data, error } = await sb.from('judge_cards').select('*');
-      if (cancelled || error || !data) return;
-      setCards(new Map(data.map((r) => [r.slug, r])));
+      const response = await fetch('/api/host/cards', { cache: 'no-store' });
+      if (cancelled || !response.ok) return;
+      const { cards: rows } = await response.json() as { cards: JudgeCardRow[] };
+      setCards(new Map(rows.map((row) => [row.slug, row])));
     }
-    load();
-
-    const channel = sb
-      .channel('host-judge-cards')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'judge_cards' },
-        () => load(),
-      )
-      .subscribe();
+    void load();
+    const interval = window.setInterval(load, 2_000);
 
     return () => {
       cancelled = true;
-      sb.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, [authed]);
 
@@ -300,10 +307,12 @@ function HostJudgeCard({
         {scored ? '● Scored' : '○ Waiting'}
       </span>
       {logoSrc ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
+        <Image
           src={logoSrc}
           alt=""
+          width={38}
+          height={38}
+          sizes="38px"
           className="bb-tile-avatar"
           style={{ filter: revealed ? 'none' : 'grayscale(0.6) brightness(0.7)' }}
         />

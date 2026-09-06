@@ -1,30 +1,25 @@
 import type { Metadata } from 'next';
-import { Inter, Bebas_Neue, JetBrains_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({
+const geist = Geist({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-geist',
   display: 'swap',
 });
 
-const bebas = Bebas_Neue({
-  weight: '400',
-  subsets: ['latin'],
-  variable: '--font-bebas',
-  display: 'swap',
-});
-
-const mono = JetBrains_Mono({
+const geistMono = Geist_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
   display: 'swap',
-  weight: ['400', '500', '700'],
 });
 
 export const metadata: Metadata = {
-  title: 'Scorecard',
-  description: 'Live pairwise scoring for 1v1 bodybuilder comparisons.',
+  title: {
+    default: 'Project: Bodybuilding — Live Scorecard',
+    template: '%s — Project: Bodybuilding',
+  },
+  description: 'Live, panel-based scoring for head-to-head bodybuilding comparisons.',
 };
 
 export default function RootLayout({
@@ -32,7 +27,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} ${bebas.variable} ${mono.variable}`}>
+      <body className={`${geist.variable} ${geistMono.variable}`}>
         {children}
       </body>
     </html>

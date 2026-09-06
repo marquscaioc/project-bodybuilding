@@ -22,7 +22,7 @@ export const Scorecard = forwardRef<HTMLDivElement, Props>(function Scorecard(
   const categories = rows.filter((r) => r.type === 'category');
 
   return (
-    <div ref={ref} className="grain grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)_minmax(0,1fr)] lg:gap-6">
+    <div ref={ref} className="scorecard-grid">
       <TitleBlock line1={brandLine1} line2={brandLine2} logoSrc={logoSrc} logoAlt={logoAlt} />
 
       <div className="lg:col-span-1">

@@ -2,23 +2,21 @@
 
 import { useEffect, useRef } from 'react';
 import { useScorecard } from '@/lib/store';
-import { getSupabaseBrowser } from '@/lib/supabase/client';
 import type { JudgeCardRow } from '@/lib/types/db';
 import type { Athlete, Match } from '@/types';
 
 const DEBOUNCE_MS = 500;
 
 /**
- * Two-way Supabase sync for one live desk, keyed by judge slug (not auth user).
+ * Two-way sync for one live desk through authenticated server routes.
  *
  * Render this *inside* a ScorecardStoreProvider (e.g. via ScorecardPage's
  * `sync` prop) so it shares the exact store the scorecard UI writes to:
- *   • On mount: fetch judge_cards[slug] and hydrate the store.
- *   • On store change: debounced upsert back to judge_cards[slug].
+ *   • On mount: fetch the authorized judge_cards[slug] and hydrate the store.
+ *   • On store change: debounced authenticated upsert for the same slug.
  *
- * A desk has a single writer (the judge sitting at it), so we don't subscribe
- * to realtime here — the host console runs its own realtime query over every
- * row instead.
+ * A desk has a single authorized writer. The host reads all cards through its
+ * own protected endpoint.
  */
 export function JudgeCardSync({
   slug,
@@ -45,15 +43,15 @@ export function JudgeCardSync({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const supabase = getSupabaseBrowser();
-      const { data, error } = await supabase
-        .from('judge_cards')
-        .select('*')
-        .eq('slug', slug)
-        .maybeSingle();
+      const response = await fetch(`/api/judge-card?slug=${encodeURIComponent(slug)}`, {
+        cache: 'no-store',
+      });
       if (cancelled) return;
-      if (!error && data) {
-        hydrateStoreFromRow(data, { setName, setRow, setCurrentPose });
+      if (response.ok) {
+        const { card } = await response.json() as { card: JudgeCardRow | null };
+        if (card) {
+          hydrateStoreFromRow(card, { setName, setRow, setCurrentPose });
+        }
       }
       hydratedRef.current = true;
     })();
@@ -68,16 +66,19 @@ export function JudgeCardSync({
     if (!hydratedRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
-      const supabase = getSupabaseBrowser();
-      const { error } = await supabase.from('judge_cards').upsert({
-        slug,
-        display_name: displayName,
-        athlete_a: stripPhotos(athleteA),
-        athlete_b: stripPhotos(athleteB),
-        rows,
-        current_pose_id: currentPoseId,
+      const response = await fetch('/api/judge-card', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          displayName,
+          athleteA: stripPhotos(athleteA),
+          athleteB: stripPhotos(athleteB),
+          rows,
+          currentPoseId,
+        }),
       });
-      if (error) console.warn('judge_card upsert failed', error);
+      if (!response.ok) console.warn('judge_card save failed', response.status);
     }, DEBOUNCE_MS);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

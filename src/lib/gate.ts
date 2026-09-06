@@ -8,13 +8,22 @@
  * Set `GATE_PASSWORD` and `GATE_SECRET` in Railway for production.
  */
 
-const PASSWORD = process.env.GATE_PASSWORD || 'projectbb123';
-const SECRET =
-  process.env.GATE_SECRET ||
-  'pbb-default-rotate-in-railway-env-vars-please-3f8a';
-
 export const GATE_COOKIE = 'bb_gate';
 const TTL_SECONDS = 7 * 24 * 60 * 60;
+
+function getPassword(): string {
+  const password = process.env.GATE_PASSWORD;
+  if (password) return password;
+  if (process.env.NODE_ENV !== 'production') return 'projectbb123';
+  throw new Error('GATE_PASSWORD must be configured in production');
+}
+
+function getSecret(): string {
+  const secret = process.env.GATE_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV !== 'production') return 'local-development-only-secret';
+  throw new Error('GATE_SECRET must be configured in production');
+}
 
 function toBase64Url(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -33,7 +42,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 async function sign(payload: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(SECRET),
+    new TextEncoder().encode(getSecret()),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -69,8 +78,8 @@ export async function verifyGateToken(
 }
 
 export function passwordMatches(input: unknown): boolean {
-  if (typeof input !== 'string') return false;
-  return input.trim().toLowerCase() === PASSWORD.toLowerCase();
+  if (typeof input !== 'string' || input.length > 128) return false;
+  return timingSafeEqual(input.trim(), getPassword());
 }
 
 export const GATE_COOKIE_MAX_AGE = TTL_SECONDS;

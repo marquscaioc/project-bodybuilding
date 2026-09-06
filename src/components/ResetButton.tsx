@@ -11,10 +11,10 @@ export function ResetButton() {
       onClick={() => {
         if (confirm('Clear all scores? Athlete names stay.')) reset();
       }}
-      className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-[var(--fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+      className="control-button control-button-quiet"
     >
       <RotateCcw size={14} />
-      Reset
+      Clear calls
     </button>
   );
 }

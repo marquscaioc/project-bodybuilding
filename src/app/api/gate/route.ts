@@ -6,8 +6,6 @@ import {
   GATE_COOKIE_MAX_AGE,
 } from '@/lib/gate';
 
-export const runtime = 'edge';
-
 export async function POST(req: NextRequest) {
   let body: unknown = null;
   try {

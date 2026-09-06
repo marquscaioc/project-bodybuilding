@@ -36,14 +36,14 @@ export type BuiltinJudge = {
 export const BUILTIN_JUDGES: BuiltinJudge[] = [
   {
     slug: 'project-bodybuilding',
-    name: 'Project Bodybuilding',
+    name: 'Project: Bodybuilding',
     line1: 'Project:',
     line2: 'Bodybuilding',
     themeClass: 'theme-project-bodybuilding',
-    logoSrc: '/logos/dih.jpg',
-    swatch: '#ff2d8c',
-    accent: '#ffc94e',
-    deep: '#4a1a5b',
+    logoSrc: '/logos/project-bodybuilding.jpg',
+    swatch: '#ff2f92',
+    accent: '#ffe45e',
+    deep: '#461052',
   },
   {
     slug: 'supersetman',

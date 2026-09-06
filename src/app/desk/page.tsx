@@ -1,43 +1,82 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ScorecardPage } from '@/components/ScorecardPage';
 import { JudgeCardSync } from '@/components/JudgeCardProvider';
 import { ShowPhotosSync } from '@/components/ShowPhotosSync';
 import { getBuiltinJudge } from '@/lib/builtinJudges';
-import { clearJudgeSession, getJudgeSession, HOST_SLUG, SHOW_CODE } from '@/lib/show';
+import {
+  clearJudgeSession,
+  getJudgeSession,
+  HOST_SLUG,
+  setJudgeSession,
+  SHOW_ID,
+} from '@/lib/show';
 
-/**
- * The signed-in judge's live desk: their themed scorecard, cloud-synced to
- * judge_cards[slug] so the host console can reveal + average it. Reads the
- * desk from localStorage; if none, bounce to the pick-a-desk login.
- */
+type DeskSession = {
+  principal: string;
+  allowedDesks: string[];
+};
+
 export default function DeskPage() {
   const router = useRouter();
-  // undefined = still reading localStorage; null = no session (redirecting).
-  const [slug, setSlug] = useState<string | null | undefined>(undefined);
+  const [session, setSession] = useState<DeskSession | null>(null);
+  const [slug, setSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    const s = getJudgeSession();
-    if (!s) {
-      router.replace('/login?next=/desk');
-      return;
+    let cancelled = false;
+
+    async function loadSession() {
+      const response = await fetch('/api/show-session', { cache: 'no-store' });
+      if (!response.ok) {
+        clearJudgeSession();
+        router.replace('/?access=required');
+        return;
+      }
+
+      const data = await response.json() as DeskSession;
+      if (cancelled) return;
+      const preferred = getJudgeSession();
+      const active = preferred && data.allowedDesks.includes(preferred)
+        ? preferred
+        : data.principal;
+      setJudgeSession(active);
+      setSession(data);
+      setSlug(active);
     }
-    setSlug(s);
+
+    void loadSession();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  if (!slug) return null;
+  if (!session || !slug) return null;
 
   const judge = getBuiltinJudge(slug);
   if (!judge) return null;
 
-  const isHost = slug === HOST_SLUG;
+  const isPrincipalHost = session.principal === HOST_SLUG;
+  const isPrimaryHostDesk = isPrincipalHost && slug === HOST_SLUG;
+
+  async function signOut() {
+    await fetch('/api/show-session', { method: 'DELETE' }).catch(() => undefined);
+    clearJudgeSession();
+    router.replace('/');
+  }
+
+  function selectDesk(nextSlug: string) {
+    if (!session?.allowedDesks.includes(nextSlug)) return;
+    setJudgeSession(nextSlug);
+    setSlug(nextSlug);
+  }
 
   return (
     <>
       <ScorecardPage
+        key={slug}
         judgeId={`judge:${slug}`}
         themeClass={judge.themeClass}
         brand={judge.name}
@@ -45,22 +84,21 @@ export default function DeskPage() {
         brandLine2={judge.line2}
         logoSrc={judge.logoSrc}
         showThemeNav={false}
-        photosReadOnly={!isHost}
+        photosReadOnly={!isPrimaryHostDesk}
         sync={
           <>
             <JudgeCardSync slug={slug} displayName={judge.name} />
-            <ShowPhotosSync showCode={SHOW_CODE} isHost={isHost} />
+            <ShowPhotosSync showCode={SHOW_ID} isHost={isPrimaryHostDesk} />
           </>
         }
       />
       <DeskControls
         themeClass={judge.themeClass}
-        judgeName={judge.name}
-        isHost={isHost}
-        onSwitch={() => {
-          clearJudgeSession();
-          router.replace('/login');
-        }}
+        activeSlug={slug}
+        allowedDesks={session.allowedDesks}
+        canOpenHost={isPrincipalHost}
+        onSelectDesk={selectDesk}
+        onSignOut={signOut}
       />
     </>
   );
@@ -68,36 +106,61 @@ export default function DeskPage() {
 
 function DeskControls({
   themeClass,
-  judgeName,
-  isHost,
-  onSwitch,
+  activeSlug,
+  allowedDesks,
+  canOpenHost,
+  onSelectDesk,
+  onSignOut,
 }: {
   themeClass: string;
-  judgeName: string;
-  isHost: boolean;
-  onSwitch: () => void;
+  activeSlug: string;
+  allowedDesks: string[];
+  canOpenHost: boolean;
+  onSelectDesk: (slug: string) => void;
+  onSignOut: () => void | Promise<void>;
 }) {
   return (
     <div
-      className={`${themeClass} fixed bottom-3 right-3 z-40 flex items-center gap-2 border border-[var(--rule)] bg-black/85 px-3 py-2 backdrop-blur`}
+      className={`${themeClass} fixed bottom-3 right-3 z-40 flex flex-wrap items-center justify-end gap-2 border border-[var(--rule)] bg-black/90 px-3 py-2 backdrop-blur`}
     >
-      <span className="font-display text-[0.6rem] uppercase tracking-[0.3em] text-[var(--fg-mute)]">
-        Desk · {judgeName}
-      </span>
-      {isHost && (
+      {allowedDesks.length > 1 && (
+        <div className="flex items-center gap-1" aria-label="Authorized desks">
+          {allowedDesks.map((slug) => {
+            const judge = getBuiltinJudge(slug);
+            if (!judge) return null;
+            const active = slug === activeSlug;
+            return (
+              <button
+                key={slug}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onSelectDesk(slug)}
+                className="min-h-9 border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] transition"
+                style={{
+                  borderColor: active ? judge.accent : 'var(--rule-strong)',
+                  color: active ? judge.accent : 'var(--fg-dim)',
+                }}
+              >
+                {judge.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {canOpenHost && (
         <Link
           href="/host"
-          className="border border-[var(--accent)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--strip-fg)]"
+          className="inline-flex min-h-9 items-center border border-[var(--accent)] px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--bg)]"
         >
           Host console
         </Link>
       )}
       <button
         type="button"
-        onClick={onSwitch}
-        className="border border-[var(--rule-strong)] bg-transparent px-3 py-1 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--fg-dim)] transition hover:text-[var(--fg)]"
+        onClick={onSignOut}
+        className="min-h-9 border border-[var(--rule-strong)] bg-transparent px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-[var(--fg-dim)] transition hover:text-[var(--fg)]"
       >
-        Switch desk
+        Sign out
       </button>
     </div>
   );

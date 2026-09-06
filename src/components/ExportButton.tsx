@@ -6,7 +6,7 @@ import { useState, type RefObject } from 'react';
 export function ExportButton({
   targetRef,
 }: {
-  targetRef: RefObject<HTMLDivElement>;
+  targetRef: RefObject<HTMLDivElement | null>;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -33,10 +33,10 @@ export function ExportButton({
           setBusy(false);
         }
       }}
-      className="inline-flex items-center gap-2 rounded-md border border-[var(--accent)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-60"
+      className="control-button control-button-primary"
     >
       <Download size={14} />
-      {busy ? 'Exporting…' : 'Export PNG'}
+      {busy ? 'Rendering…' : 'Export PNG'}
     </button>
   );
 }

@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { BUILTIN_JUDGES } from '@/lib/builtinJudges';
-import { getSupabaseBrowser } from '@/lib/supabase/client';
 import type { JudgeCardRow } from '@/lib/types/db';
 import type { Row } from '@/types';
 import {
@@ -97,11 +96,11 @@ export function PanelSim() {
     setLoading(true);
     setStatus('Reading judge_cards…');
     try {
-      const sb = getSupabaseBrowser();
-      const { data, error } = await sb.from('judge_cards').select('*');
-      if (error) throw error;
+      const response = await fetch('/api/host/cards', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`request failed (${response.status})`);
+      const { cards: data } = await response.json() as { cards: JudgeCardRow[] };
       const bySlug = new Map<string, JudgeCardRow>(
-        (data ?? []).map((r) => [r.slug, r as JudgeCardRow]),
+        data.map((row) => [row.slug, row]),
       );
       let found = 0;
       setDesks((ds) =>

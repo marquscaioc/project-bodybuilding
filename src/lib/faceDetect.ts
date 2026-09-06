@@ -10,7 +10,7 @@ import { loadImage } from './loadImage';
  */
 let detectorPromise: Promise<import('@mediapipe/tasks-vision').FaceDetector> | null = null;
 
-const VISION_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
+const VISION_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
 
@@ -62,4 +62,3 @@ export async function detectFace(imageUrl: string): Promise<FaceBox | null> {
     imgH: img.naturalHeight,
   };
 }
-

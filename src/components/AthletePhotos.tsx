@@ -989,11 +989,14 @@ function formatFeetInches(cm: number): string {
  * Lightweight ResizeObserver hook (avoids depending on a util library).
  */
 function useResizeObserver<T extends HTMLElement>(
-  ref: React.RefObject<T>,
+  ref: React.RefObject<T | null>,
   cb: (entry: ResizeObserverEntry) => void,
 ) {
   const cbRef = useRef(cb);
-  cbRef.current = cb;
+
+  useEffect(() => {
+    cbRef.current = cb;
+  }, [cb]);
 
   useEffect(() => {
     const el = ref.current;

@@ -42,7 +42,7 @@ export function ScoreTable({
           </colgroup>
           {showHeader && (
             <thead>
-              <tr className="bg-[var(--strip-bg)] text-white">
+              <tr className="bg-[var(--strip-bg)] text-[var(--strip-fg)]">
                 <th className="border-r border-black/30 px-3 py-2 text-left">
                   <span className="font-display text-sm uppercase tracking-[0.25em] opacity-60">
                     Row
@@ -53,7 +53,7 @@ export function ScoreTable({
                     value={athleteA}
                     onChange={(e) => setName('A', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-white outline-none placeholder:text-white/40 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 sm:text-2xl"
                     placeholder="Athlete A"
                     aria-label="Athlete A name"
                   />
@@ -63,7 +63,7 @@ export function ScoreTable({
                     value={athleteB}
                     onChange={(e) => setName('B', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-white outline-none placeholder:text-white/40 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 sm:text-2xl"
                     placeholder="Athlete B"
                     aria-label="Athlete B name"
                   />
@@ -96,7 +96,7 @@ export function ScoreTable({
               </tr>
             ))}
 
-            <tr className="border-t border-[var(--rule-strong)] bg-[var(--strip-bg)] text-white">
+            <tr className="border-t border-[var(--rule-strong)] bg-[var(--strip-bg)] text-[var(--strip-fg)]">
               <th
                 scope="row"
                 className="border-r border-black/30 px-3 py-2 text-left font-display text-lg uppercase tracking-[0.3em]"

@@ -1,8 +1,19 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { GATE_COOKIE, verifyGateToken } from '@/lib/gate';
+import { HOST_SLUG } from '@/lib/show';
+import { allowedDesksFor, SHOW_COOKIE, verifyShowToken } from '@/lib/showAuth';
 
-const GATED_PATHS = ['/open'];
+const GATED_PATHS = ['/open', '/j'];
+const JUDGE_PATHS = new Set([
+  '/project-bodybuilding',
+  '/supersetman',
+  '/epzeronine',
+  '/marxmaxmuscle',
+  '/xavier',
+  '/marcus',
+  '/superchat',
+]);
 
 /**
  * Refresh Supabase auth tokens on every request that could need them.
@@ -10,7 +21,7 @@ const GATED_PATHS = ['/open'];
  * Supabase outage) never 500s the entire site — middleware just no-ops
  * and the request continues to the page handler.
  */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   // Single-password gate: block protected paths until cookie is valid.
   const path = req.nextUrl.pathname;
   if (GATED_PATHS.some((p) => path === p || path.startsWith(`${p}/`))) {
@@ -20,6 +31,33 @@ export async function middleware(req: NextRequest) {
       const redirect = req.nextUrl.clone();
       redirect.pathname = '/';
       redirect.searchParams.set('gate', 'required');
+      return NextResponse.redirect(redirect);
+    }
+  }
+
+  if (JUDGE_PATHS.has(path)) {
+    const principal = await verifyShowToken(req.cookies.get(SHOW_COOKIE)?.value);
+    const deskSlug = path.slice(1);
+    if (!principal || !allowedDesksFor(principal).includes(deskSlug)) {
+      const redirect = req.nextUrl.clone();
+      redirect.pathname = '/';
+      redirect.searchParams.set('access', 'required');
+      return NextResponse.redirect(redirect);
+    }
+  }
+
+  if (
+    path === '/desk' ||
+    path.startsWith('/desk/') ||
+    path === '/host' ||
+    path === '/lab'
+  ) {
+    const slug = await verifyShowToken(req.cookies.get(SHOW_COOKIE)?.value);
+    const hostOnly = path === '/host' || path === '/lab';
+    if (!slug || (hostOnly && slug !== HOST_SLUG)) {
+      const redirect = req.nextUrl.clone();
+      redirect.pathname = '/';
+      redirect.searchParams.set('access', hostOnly ? 'host' : 'required');
       return NextResponse.redirect(redirect);
     }
   }
@@ -49,7 +87,7 @@ export async function middleware(req: NextRequest) {
     await supabase.auth.getUser();
   } catch (err) {
     // Don't crash the request just because session refresh failed.
-    console.warn('middleware auth refresh failed', err);
+    console.warn('proxy auth refresh failed', err);
   }
   return res;
 }

@@ -6,7 +6,7 @@ import { AthletePhotos } from '@/components/AthletePhotos';
 import { ExportButton } from '@/components/ExportButton';
 import { ResetButton } from '@/components/ResetButton';
 import { ThemeNav } from '@/components/ThemeNav';
-import { ScorecardStoreProvider } from '@/lib/store';
+import { ScorecardStoreProvider, useScorecard } from '@/lib/store';
 
 export type ScorecardPageProps = {
   /**
@@ -63,30 +63,56 @@ function ScorecardPageBody({
   photosReadOnly = false,
 }: Omit<ScorecardPageProps, 'judgeId'>) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const scoredRows = useScorecard((state) =>
+    state.rows.filter((row) => row.winner !== null).length,
+  );
 
   return (
     <div className={`theme-wrap ${themeClass ?? ''}`} style={themeStyle}>
-      <main className="flex min-h-dvh flex-col gap-6 px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
-        <header className="flex flex-wrap items-center justify-center gap-3 text-center">
-          <span className="text-[0.7rem] uppercase tracking-[0.35em] text-[var(--fg-dim)]">
-            {brand} · Live
-          </span>
-          {showThemeNav && <ThemeNav />}
-          <div className="flex items-center gap-2">
+      <a className="skip-link" href="#scorecard-main">Skip to scorecard</a>
+      <main id="scorecard-main" className="scorecard-shell">
+        <header className="scorecard-command-bar">
+          <div className="min-w-0">
+            <span className="scorecard-kicker">
+              <span className="bb-live-dot" aria-hidden /> Live judging desk
+            </span>
+            <h1 className="scorecard-brand truncate">{brand}</h1>
+          </div>
+
+          <div className="scorecard-status" aria-live="polite">
+            <span className="scorecard-status-value">{String(scoredRows).padStart(2, '0')}</span>
+            <span className="scorecard-status-label">of 12 calls locked</span>
+          </div>
+
+          <div className="scorecard-actions">
             <ResetButton />
             <ExportButton targetRef={cardRef} />
           </div>
         </header>
 
-        <Scorecard
-          ref={cardRef}
-          brandLine1={brandLine1}
-          brandLine2={brandLine2}
-          logoSrc={logoSrc}
-          logoAlt={brand}
-        />
+        {showThemeNav && (
+          <div className="scorecard-network-nav">
+            <ThemeNav />
+          </div>
+        )}
 
-        <AthletePhotos readOnly={photosReadOnly} />
+        <section className="scorecard-canvas" aria-label={`${brand} scorecard`}>
+          <Scorecard
+            ref={cardRef}
+            brandLine1={brandLine1}
+            brandLine2={brandLine2}
+            logoSrc={logoSrc}
+            logoAlt={brand}
+          />
+        </section>
+
+        <section className="scorecard-photo-section" aria-label="Athlete comparison stage">
+          <div className="scorecard-section-heading">
+            <span>02 / Comparison stage</span>
+            <span>Pose-synced athlete view</span>
+          </div>
+          <AthletePhotos readOnly={photosReadOnly} />
+        </section>
       </main>
     </div>
   );
