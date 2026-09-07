@@ -7,9 +7,9 @@ import {
   VOTER_COOKIE,
   VOTER_SESSION_MAX_AGE,
 } from '@/lib/fanAuth';
-import { HOST_SLUG, SHOW_ID } from '@/lib/show';
+import { getHostMatchup } from '@/lib/hostMatchup';
+import { SHOW_ID } from '@/lib/show';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import type { Athlete } from '@/types';
 import type { LiveVoteChoice } from '@/lib/types/db';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -21,22 +21,10 @@ const VALID_CHOICES = new Set<LiveVoteChoice>([
 
 type VoteMap = Record<string, LiveVoteChoice>;
 
-function normalizedName(value: unknown, fallback: string) {
-  if (!value || typeof value !== 'object') return fallback;
-  const name = (value as Athlete).name;
-  return typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : fallback;
-}
-
 async function matchup() {
-  const { data, error } = await getSupabaseAdmin()
-    .from('judge_cards')
-    .select('athlete_a, athlete_b')
-    .eq('slug', HOST_SLUG)
-    .maybeSingle();
-
-  if (error) throw error;
-  const athleteA = normalizedName(data?.athlete_a, 'Athlete A');
-  const athleteB = normalizedName(data?.athlete_b, 'Athlete B');
+  const host = await getHostMatchup();
+  const athleteA = host.athleteA.name;
+  const athleteB = host.athleteB.name;
   const source = `${SHOW_ID}\u0000${athleteA.toLocaleLowerCase()}\u0000${athleteB.toLocaleLowerCase()}`;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
   const key = Buffer.from(digest).toString('base64url').slice(0, 32);
@@ -156,6 +144,18 @@ export async function POST(request: NextRequest) {
       { onConflict: 'matchup_key,voter_id' },
     );
 
+    if (error?.code === '23505') {
+      return NextResponse.json(
+        { error: 'That username already voted in this matchup.' },
+        { status: 409, headers: NO_STORE },
+      );
+    }
+    if (error?.code === 'P0001') {
+      return NextResponse.json(
+        { error: 'That vote is already locked.' },
+        { status: 409, headers: NO_STORE },
+      );
+    }
     if (error) throw error;
     const response = NextResponse.json(await snapshot(voterId), { headers: NO_STORE });
     if (!existingId) {

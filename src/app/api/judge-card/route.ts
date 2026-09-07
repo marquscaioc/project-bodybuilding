@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isValidJudgeSlug } from '@/lib/show';
+import { getHostMatchup, withHostName } from '@/lib/hostMatchup';
+import { HOST_SLUG, isValidJudgeSlug } from '@/lib/show';
 import {
   allowedDesksFor,
   SHOW_COOKIE,
@@ -24,16 +25,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
   }
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('judge_cards')
-    .select('*')
-    .eq('slug', slug)
-    .maybeSingle();
+  const admin = getSupabaseAdmin();
+  const [{ data, error }, host] = await Promise.all([
+    admin.from('judge_cards').select('*').eq('slug', slug).maybeSingle(),
+    slug === HOST_SLUG ? Promise.resolve(null) : getHostMatchup(),
+  ]);
 
   if (error) {
     return NextResponse.json({ error: 'Could not load scorecard' }, { status: 502, headers: NO_STORE });
   }
-  return NextResponse.json({ card: data }, { headers: NO_STORE });
+  const card = data && host
+    ? {
+        ...data,
+        athlete_a: withHostName(data.athlete_a, host.athleteA),
+        athlete_b: withHostName(data.athlete_b, host.athleteB),
+      }
+    : data;
+  return NextResponse.json({ card }, { headers: NO_STORE });
 }
 
 export async function PUT(request: NextRequest) {
@@ -53,11 +61,14 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
   }
 
+  const host = body.slug === HOST_SLUG ? null : await getHostMatchup();
+  const athleteA = stripPhotos(body.athleteA);
+  const athleteB = stripPhotos(body.athleteB);
   const { error } = await getSupabaseAdmin().from('judge_cards').upsert({
     slug: body.slug,
     display_name: body.displayName.slice(0, 100),
-    athlete_a: body.athleteA,
-    athlete_b: body.athleteB,
+    athlete_a: host ? withHostName(athleteA, host.athleteA) : athleteA,
+    athlete_b: host ? withHostName(athleteB, host.athleteB) : athleteB,
     rows: body.rows,
     current_pose_id: body.currentPoseId.slice(0, 32),
   });
@@ -66,6 +77,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Could not save scorecard' }, { status: 502, headers: NO_STORE });
   }
   return NextResponse.json({ ok: true }, { headers: NO_STORE });
+}
+
+function stripPhotos(athlete: Athlete): Athlete {
+  const copy = { ...athlete };
+  delete copy.photos;
+  return copy;
 }
 
 type JudgeCardInput = {

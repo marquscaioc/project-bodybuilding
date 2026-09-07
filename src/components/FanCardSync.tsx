@@ -6,6 +6,7 @@ import type { FanScorecardRow } from '@/lib/types/db';
 import type { Athlete, Match } from '@/types';
 
 const DEBOUNCE_MS = 500;
+const MATCHUP_POLL_MS = 2_000;
 
 /** Syncs the current browser's approved fan card. The API derives its ID from the signed cookie. */
 export function FanCardSync() {
@@ -35,6 +36,24 @@ export function FanCardSync() {
       cancelled = true;
     };
   }, [setCurrentPose, setName, setRow]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadNames() {
+      const response = await fetch('/api/matchup', { cache: 'no-store' });
+      if (cancelled || !response.ok) return;
+      const matchup = await response.json() as { athleteA: string; athleteB: string };
+      if (matchup.athleteA !== athleteA.name) setName('A', matchup.athleteA);
+      if (matchup.athleteB !== athleteB.name) setName('B', matchup.athleteB);
+    }
+
+    void loadNames();
+    const interval = window.setInterval(loadNames, MATCHUP_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [athleteA.name, athleteB.name, setName]);
 
   useEffect(() => {
     if (!hydratedRef.current) return;

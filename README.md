@@ -48,7 +48,9 @@ Dylan opens `/host/superchats`, creates an invitation, and posts its link in You
 
 ## Public live vote
 
-`/vote` is the open audience ballot. Viewers enter only a username—there is no account or approval step—then pick Athlete A, a tie, or Athlete B with the same 1–4 point margin used on the judge cards. Vote totals and weighted 0–100 crowd averages refresh live. The athlete names on Dylan's desk define the active matchup, so changing either athlete automatically starts a clean ballot without destroying the previous result.
+`/vote` is the open audience ballot. Viewers enter only a username—there is no account or approval step—then pick Athlete A, a tie, or Athlete B with the same 1–4 point margin used on the judge cards. Each pose or category is locked after its first submission, and each username can create only one ballot per matchup. Vote totals and weighted 0–100 crowd averages refresh live.
+
+Dylan's Project: Bodybuilding desk is the canonical source for both athlete names. Changes propagate to every judge desk, private Super Chat scorecard, and audience ballot; the other desks display those names as read-only. Changing either athlete starts a clean audience ballot without destroying the previous result.
 
 ## Quality checks
 
@@ -84,4 +86,4 @@ docker run --rm -p 3000:3000 --env-file .env.local project-bodybuilding
 
 ## Data setup
 
-Apply the SQL files under `supabase/migrations` in order. Migration `0004` removes public access to judge scorecards; authenticated server routes become the only read/write path. Migration `0005` adds the private manual Super Chat invitation and claim flow. Migrations `0006` and `0007` add the server-mediated public live vote and its 1–4 point aggregation. The shared show-photo manifest and its public Storage bucket remain readable by the judging clients.
+Apply the SQL files under `supabase/migrations` in order. Migration `0004` removes public access to judge scorecards; authenticated server routes become the only read/write path. Migration `0005` adds the private manual Super Chat invitation and claim flow. Migrations `0006` and `0007` add the server-mediated public live vote and its 1–4 point aggregation. Migration `0008` locks submitted audience choices and prevents duplicate usernames per matchup. Migration `0009` makes Dylan's athlete names canonical across judge and fan cards. The shared show-photo manifest and its public Storage bucket remain readable by the judging clients.

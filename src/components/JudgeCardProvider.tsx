@@ -2,10 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 import { useScorecard } from '@/lib/store';
+import { HOST_SLUG } from '@/lib/show';
 import type { JudgeCardRow } from '@/lib/types/db';
 import type { Athlete, Match } from '@/types';
 
 const DEBOUNCE_MS = 500;
+const MATCHUP_POLL_MS = 2_000;
 
 /**
  * Two-way sync for one live desk through authenticated server routes.
@@ -60,6 +62,28 @@ export function JudgeCardSync({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Dylan owns the matchup names. Other desks only mirror those two fields;
+  // their points, pose tab, height adjustments and local UI state stay intact.
+  useEffect(() => {
+    if (slug === HOST_SLUG) return;
+    let cancelled = false;
+
+    async function loadNames() {
+      const response = await fetch('/api/matchup', { cache: 'no-store' });
+      if (cancelled || !response.ok) return;
+      const matchup = await response.json() as { athleteA: string; athleteB: string };
+      if (matchup.athleteA !== athleteA.name) setName('A', matchup.athleteA);
+      if (matchup.athleteB !== athleteB.name) setName('B', matchup.athleteB);
+    }
+
+    void loadNames();
+    const interval = window.setInterval(loadNames, MATCHUP_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [athleteA.name, athleteB.name, setName, slug]);
 
   // ── 2. Persist local changes to Supabase, debounced ──
   useEffect(() => {

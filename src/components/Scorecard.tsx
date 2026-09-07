@@ -11,10 +11,11 @@ type Props = {
   brandLine2?: string;
   logoSrc?: string;
   logoAlt?: string;
+  athleteNamesReadOnly?: boolean;
 };
 
 export const Scorecard = forwardRef<HTMLDivElement, Props>(function Scorecard(
-  { brandLine1, brandLine2, logoSrc, logoAlt },
+  { brandLine1, brandLine2, logoSrc, logoAlt, athleteNamesReadOnly = false },
   ref,
 ) {
   const rows = useScorecard((s) => s.rows);
@@ -26,11 +27,11 @@ export const Scorecard = forwardRef<HTMLDivElement, Props>(function Scorecard(
       <TitleBlock line1={brandLine1} line2={brandLine2} logoSrc={logoSrc} logoAlt={logoAlt} />
 
       <div className="lg:col-span-1">
-        <ScoreTable title="Poses" rows={poses} />
+        <ScoreTable title="Poses" rows={poses} athleteNamesReadOnly={athleteNamesReadOnly} />
       </div>
 
       <div className="flex flex-col gap-5 lg:col-span-1">
-        <ScoreTable title="Categories" rows={categories} />
+        <ScoreTable title="Categories" rows={categories} athleteNamesReadOnly={athleteNamesReadOnly} />
         <FinalScore />
       </div>
     </div>

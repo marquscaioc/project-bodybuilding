@@ -267,7 +267,10 @@ function VoteGroup({
               <div className="live-vote-row-label">
                 <span>{row.id}</span>
                 <strong>{row.label}</strong>
-                <small>{row.total} {row.total === 1 ? 'vote' : 'votes'}</small>
+                <small>
+                  {row.total} {row.total === 1 ? 'vote' : 'votes'}
+                  {selected ? ' · your vote is locked' : ''}
+                </small>
               </div>
               <div className="live-vote-choices" aria-label={`Point margin for ${row.label}`}>
                 <MarginSide
@@ -275,14 +278,14 @@ function VoteGroup({
                   athlete={athleteA}
                   selected={selected}
                   distribution={row.distribution}
-                  disabled={savingRow !== null}
+                  disabled={savingRow !== null || Boolean(selected)}
                   onChoose={(choice) => onChoose(row.id, choice)}
                 />
                 <button
                   type="button"
                   className={`live-vote-tie ${selected === 'tie' ? 'is-selected' : ''}`}
                   aria-pressed={selected === 'tie'}
-                  disabled={savingRow !== null}
+                  disabled={savingRow !== null || Boolean(selected)}
                   onClick={() => onChoose(row.id, 'tie')}
                 >
                   <span>Tie</span><strong>{row.distribution.tie}</strong>
@@ -292,7 +295,7 @@ function VoteGroup({
                   athlete={athleteB}
                   selected={selected}
                   distribution={row.distribution}
-                  disabled={savingRow !== null}
+                  disabled={savingRow !== null || Boolean(selected)}
                   onChoose={(choice) => onChoose(row.id, choice)}
                 />
               </div>

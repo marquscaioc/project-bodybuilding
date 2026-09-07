@@ -9,10 +9,12 @@ export function ScoreTable({
   title,
   rows,
   showHeader = true,
+  athleteNamesReadOnly = false,
 }: {
   title: string;
   rows: Row[];
   showHeader?: boolean;
+  athleteNamesReadOnly?: boolean;
 }) {
   const athleteA = useScorecard((s) => s.athleteA.name);
   const athleteB = useScorecard((s) => s.athleteB.name);
@@ -51,9 +53,11 @@ export function ScoreTable({
                 <th className="border-r border-black/30 px-2 py-1.5">
                   <input
                     value={athleteA}
+                    readOnly={athleteNamesReadOnly}
+                    title={athleteNamesReadOnly ? 'Set by Project: Bodybuilding' : undefined}
                     onChange={(e) => setName('A', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 read-only:cursor-default sm:text-2xl"
                     placeholder="Athlete A"
                     aria-label="Athlete A name"
                   />
@@ -61,9 +65,11 @@ export function ScoreTable({
                 <th className="px-2 py-1.5">
                   <input
                     value={athleteB}
+                    readOnly={athleteNamesReadOnly}
+                    title={athleteNamesReadOnly ? 'Set by Project: Bodybuilding' : undefined}
                     onChange={(e) => setName('B', e.target.value)}
                     spellCheck={false}
-                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 sm:text-2xl"
+                    className="w-full bg-transparent text-center font-display text-xl uppercase tracking-[0.15em] text-[var(--strip-fg)] outline-none placeholder:text-[var(--strip-fg)] placeholder:opacity-50 read-only:cursor-default sm:text-2xl"
                     placeholder="Athlete B"
                     aria-label="Athlete B name"
                   />

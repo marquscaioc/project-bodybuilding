@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FAN_COOKIE, hasExpired, verifyFanToken } from '@/lib/fanAuth';
+import { getHostMatchup, withHostName } from '@/lib/hostMatchup';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import type { FanScorecardRow } from '@/lib/types/db';
 import type { Athlete, Row } from '@/types';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const MAX_BODY_BYTES = 256 * 1024;
 
 export async function GET(request: NextRequest) {
-  const access = await authorize(request);
+  const [access, host] = await Promise.all([authorize(request), getHostMatchup()]);
   if (!access) return forbidden();
-  return NextResponse.json({ card: access.card }, { headers: NO_STORE });
+  return NextResponse.json(
+    { card: withCanonicalNames(access.card, host.athleteA, host.athleteB) },
+    { headers: NO_STORE },
+  );
 }
 
 export async function PUT(request: NextRequest) {
@@ -18,7 +23,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: NO_STORE });
   }
 
-  const access = await authorize(request);
+  const [access, host] = await Promise.all([authorize(request), getHostMatchup()]);
   if (!access) return forbidden();
   if (access.card.locked || access.invite.status === 'closed') {
     return NextResponse.json({ error: 'Scorecard is locked' }, { status: 423, headers: NO_STORE });
@@ -40,8 +45,8 @@ export async function PUT(request: NextRequest) {
   const { error } = await getSupabaseAdmin()
     .from('fan_scorecards')
     .update({
-      athlete_a: stripPhotos(body.athleteA),
-      athlete_b: stripPhotos(body.athleteB),
+      athlete_a: withHostName(stripPhotos(body.athleteA), host.athleteA),
+      athlete_b: withHostName(stripPhotos(body.athleteB), host.athleteB),
       rows: body.rows,
       current_pose_id: body.currentPoseId.slice(0, 32),
     })
@@ -102,6 +107,18 @@ function stripPhotos(athlete: Athlete): Athlete {
   const copy = { ...athlete };
   delete copy.photos;
   return copy;
+}
+
+function withCanonicalNames(
+  card: FanScorecardRow,
+  athleteA: Athlete,
+  athleteB: Athlete,
+): FanScorecardRow {
+  return {
+    ...card,
+    athlete_a: withHostName(card.athlete_a, athleteA),
+    athlete_b: withHostName(card.athlete_b, athleteB),
+  };
 }
 
 function forbidden() {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildInitialRows } from '@/lib/constants';
+import { getHostMatchup } from '@/lib/hostMatchup';
 import { HOST_SLUG } from '@/lib/show';
 import { SHOW_COOKIE, verifyShowToken } from '@/lib/showAuth';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -67,14 +68,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not create invitation' }, { status: 502, headers: NO_STORE });
   }
 
-  const { data: hostCard } = await admin
-    .from('judge_cards')
-    .select('athlete_a, athlete_b, current_pose_id')
-    .eq('slug', HOST_SLUG)
-    .maybeSingle();
-
-  const athleteA = stripPhotos(hostCard?.athlete_a ?? { name: 'Athlete A' });
-  const athleteB = stripPhotos(hostCard?.athlete_b ?? { name: 'Athlete B' });
+  const hostMatchup = await getHostMatchup();
+  const athleteA = stripPhotos(hostMatchup.athleteA);
+  const athleteB = stripPhotos(hostMatchup.athleteB);
   const { data: card, error: cardError } = await admin
     .from('fan_scorecards')
     .insert({
@@ -83,7 +79,7 @@ export async function POST(request: NextRequest) {
       athlete_a: athleteA,
       athlete_b: athleteB,
       rows: buildInitialRows(),
-      current_pose_id: hostCard?.current_pose_id ?? 'FDB',
+      current_pose_id: hostMatchup.currentPoseId,
     })
     .select('*')
     .single();

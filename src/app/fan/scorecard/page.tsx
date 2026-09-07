@@ -41,6 +41,7 @@ export default async function FanScorecardPage() {
         brandLine2="Scorecard"
         showThemeNav={false}
         photosReadOnly
+        athleteNamesReadOnly
         sync={
           <>
             <FanCardSync />

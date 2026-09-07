@@ -85,6 +85,7 @@ export default function DeskPage() {
         logoSrc={judge.logoSrc}
         showThemeNav={false}
         photosReadOnly={!isPrimaryHostDesk}
+        athleteNamesReadOnly={!isPrimaryHostDesk}
         sync={
           <>
             <JudgeCardSync slug={slug} displayName={judge.name} />

@@ -39,6 +39,8 @@ export type ScorecardPageProps = {
    * Host's curated images; the Host desk and solo routes stay editable.
    */
   photosReadOnly?: boolean;
+  /** Only Dylan's primary Host desk can edit the shared athlete names. */
+  athleteNamesReadOnly?: boolean;
 };
 
 export function ScorecardPage(props: ScorecardPageProps) {
@@ -61,6 +63,7 @@ function ScorecardPageBody({
   logoSrc,
   showThemeNav = true,
   photosReadOnly = false,
+  athleteNamesReadOnly = false,
 }: Omit<ScorecardPageProps, 'judgeId'>) {
   const cardRef = useRef<HTMLDivElement>(null);
   const scoredRows = useScorecard((state) =>
@@ -103,6 +106,7 @@ function ScorecardPageBody({
             brandLine2={brandLine2}
             logoSrc={logoSrc}
             logoAlt={brand}
+            athleteNamesReadOnly={athleteNamesReadOnly}
           />
         </section>
 
