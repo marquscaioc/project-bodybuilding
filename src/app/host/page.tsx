@@ -116,6 +116,18 @@ export default function HostPage() {
             {cons.scoredCount}/{total} desks scored
           </span>
           <Link
+            href="/vote"
+            className="border border-[#ff2d8c] bg-[#ff2d8c]/10 px-3 py-1.5 font-display text-[0.65rem] uppercase tracking-[0.2em] text-[#ff83bd] transition hover:bg-[#ff2d8c] hover:text-[#09000e]"
+          >
+            Audience vote
+          </Link>
+          <Link
+            href="/host/superchats"
+            className="border border-[#00d2d2] bg-[#00d2d2]/10 px-3 py-1.5 font-display text-[0.65rem] uppercase tracking-[0.2em] text-[#7be9ec] transition hover:bg-[#00d2d2] hover:text-[#050608]"
+          >
+            Super Chat access
+          </Link>
+          <Link
             href="/desk"
             className="border border-[var(--rule-strong)] bg-transparent px-3 py-1.5 font-display text-[0.65rem] uppercase tracking-[0.25em] text-[var(--fg-dim)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
           >

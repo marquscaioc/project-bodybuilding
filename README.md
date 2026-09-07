@@ -29,7 +29,8 @@ Open [http://localhost:3000](http://localhost:3000). Development-only fallback a
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public | Browser-safe Supabase key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server | Private scorecard reads/writes; never expose to the browser |
+| `SUPABASE_SECRET_KEY` | Server | Preferred private key for new Supabase projects; never expose to the browser |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server | Legacy private key accepted in place of `SUPABASE_SECRET_KEY` |
 | `GATE_PASSWORD` | Server | Password for solo scorecard routes |
 | `GATE_SECRET` | Server | HMAC secret for signed session cookies |
 | `JUDGE_CODE_DYLAN` | Server | Project: Bodybuilding owner access; also controls Superchat |
@@ -40,6 +41,14 @@ Open [http://localhost:3000](http://localhost:3000). Development-only fallback a
 | `JUDGE_CODE_MARCUS` | Server | Marcus desk access |
 
 Each judge code resolves to a single server-signed identity. Dylan is the only identity authorized for both Project: Bodybuilding and Superchat. Use unique, high-entropy values for all server variables in production.
+
+## Manual Super Chat access
+
+Dylan opens `/host/superchats`, creates an invitation, and posts its link in YouTube chat. The viewer requests access and posts the generated `PB-XXXXXX` code in chat. Dylan approves that exact request, after which the browser receives a signed private session for only its own scorecard. Invitations can be closed or reopened from the same host desk.
+
+## Public live vote
+
+`/vote` is the open audience ballot. Viewers enter only a username—there is no account or approval step—then pick Athlete A, a tie, or Athlete B with the same 1–4 point margin used on the judge cards. Vote totals and weighted 0–100 crowd averages refresh live. The athlete names on Dylan's desk define the active matchup, so changing either athlete automatically starts a clean ballot without destroying the previous result.
 
 ## Quality checks
 
@@ -75,4 +84,4 @@ docker run --rm -p 3000:3000 --env-file .env.local project-bodybuilding
 
 ## Data setup
 
-Apply the SQL files under `supabase/migrations` in order. Migration `0004` removes public access to judge scorecards; authenticated server routes become the only read/write path. The shared show-photo manifest and its public Storage bucket remain readable by the judging clients.
+Apply the SQL files under `supabase/migrations` in order. Migration `0004` removes public access to judge scorecards; authenticated server routes become the only read/write path. Migration `0005` adds the private manual Super Chat invitation and claim flow. Migrations `0006` and `0007` add the server-mediated public live vote and its 1–4 point aggregation. The shared show-photo manifest and its public Storage bucket remain readable by the judging clients.

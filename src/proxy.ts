@@ -46,14 +46,15 @@ export async function proxy(req: NextRequest) {
     }
   }
 
+  const isHostPath = path === '/host' || path.startsWith('/host/');
   if (
     path === '/desk' ||
     path.startsWith('/desk/') ||
-    path === '/host' ||
+    isHostPath ||
     path === '/lab'
   ) {
     const slug = await verifyShowToken(req.cookies.get(SHOW_COOKIE)?.value);
-    const hostOnly = path === '/host' || path === '/lab';
+    const hostOnly = isHostPath || path === '/lab';
     if (!slug || (hostOnly && slug !== HOST_SLUG)) {
       const redirect = req.nextUrl.clone();
       redirect.pathname = '/';

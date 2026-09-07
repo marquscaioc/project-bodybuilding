@@ -68,10 +68,10 @@ export default function HomePage() {
           <Image src={channelLogo} alt="" width={36} height={36} priority />
           <span className="home-wordmark-text">PROJECT: <strong>BODYBUILDING</strong></span>
         </Link>
-        <a href="#access" className="home-live-link">
+        <Link href="/vote" className="home-live-link">
           <span className="home-live-dot" aria-hidden="true" />
-          Panel access
-        </a>
+          Live audience vote
+        </Link>
       </header>
 
       <section id="access" className="home-content" aria-labelledby="home-title">
@@ -112,7 +112,7 @@ export default function HomePage() {
 
       <footer className="home-footer">
         <span>Live scoring platform</span>
-        <span>Project: Bodybuilding © {new Date().getFullYear()}</span>
+        <span>Developed by Chow Cuck · {new Date().getFullYear()}</span>
       </footer>
     </main>
   );
